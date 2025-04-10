@@ -1,0 +1,328 @@
+//
+// Zed settings
+//
+// For information on how to configure Zed, see the Zed
+// documentation: https://zed.dev/docs/configuring-zed
+//
+// To see all of Zed's default settings without changing your
+// custom settings, run `zed: open default settings` from the
+// command palette (cmd-shift-p / ctrl-shift-p)
+
+{
+  "theme": "Gruvbox Light Soft",
+  "context_servers": {
+    "mcp-docker": {
+      "command": {
+        "path": "docker",
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "alpine/socat",
+          "STDIO",
+          "TCP:host.docker.internal:8811"
+        ],
+        "env": null
+      },
+      "settings": {}
+    },
+    "my-context-server": {
+      "command": {
+        "path": "docker",
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "alpine/socat",
+          "STDIO",
+          "TCP:host.docker.internal:8811"
+        ]
+      },
+      "settings": {
+        "enable_something": null
+      }
+    }
+  },
+  "edit_predictions": {
+    "mode": "eager",
+    "copilot": {
+      "proxy": null,
+      "proxy_no_verify": null
+    },
+    "enabled_in_assistant": true
+  },
+  "assistant": {
+    "default_profile": "agent",
+    "profiles": {
+      "web": {
+        "name": "Web",
+        "tools": {},
+        "enable_all_context_servers": true,
+        "context_servers": {
+          "mcp-docker": {
+            "tools": {
+              "get_functions": true,
+              "get_response_schema": true,
+              "get_request_body": true,
+              "search_schema": true,
+              "tool_registration": true,
+              "puppeteer_click": true,
+              "puppeteer_evaluate": true,
+              "puppeteer_fill": true,
+              "puppeteer_hover": true,
+              "puppeteer_select": true,
+              "puppeteer_screenshot": true,
+              "puppeteer_navigate": true
+            }
+          }
+        }
+      },
+      "ask": {
+        "name": "Ask",
+        "tools": {
+          "diagnostics": true,
+          "fetch": true,
+          "list_directory": false,
+          "now": true,
+          "path_search": true,
+          "read_file": true,
+          "regex_search": true,
+          "thinking": true,
+          "code_symbols": true
+        },
+        "enable_all_context_servers": true,
+        "context_servers": {
+          "mcp-docker": {
+            "tools": {
+              "get_functions": true,
+              "get_response_schema": true,
+              "get_request_body": true,
+              "search_schema": true,
+              "tool_registration": true,
+              "puppeteer_click": true,
+              "puppeteer_evaluate": true,
+              "puppeteer_fill": true,
+              "puppeteer_hover": true,
+              "puppeteer_select": true,
+              "puppeteer_screenshot": true,
+              "puppeteer_navigate": true
+            }
+          }
+        }
+      },
+      "agent": {
+        "name": "Agent",
+        "tools": {
+          "code_symbols": true,
+          "delete_path": true,
+          "symbol_info": true,
+          "now": true,
+          "move_path": true,
+          "fetch": true,
+          "copy_path": true,
+          "bash": true,
+          "batch_tool": true,
+          "diagnostics": true,
+          "find_replace_file": true,
+          "list_directory": true,
+          "open": true,
+          "path_search": true,
+          "read_file": true,
+          "create_file": true,
+          "create_directory": true,
+          "regex_search": true,
+          "thinking": true
+        },
+        "enable_all_context_servers": true,
+        "context_servers": {
+          "mcp-docker": {
+            "tools": {
+              "alter_table": true,
+              "analyze_database": true,
+              "copy_between_databases": true,
+              "create_function": true,
+              "create_rls_policy": true,
+              "create_table": true,
+              "create_trigger": true,
+              "debug_database": true,
+              "disable_rls": true,
+              "docker": true,
+              "drop_function": true,
+              "drop_rls_policy": true,
+              "drop_trigger": true,
+              "enable_rls": true,
+              "export_table_data": true,
+              "get_endpoint": true,
+              "get_component": true,
+              "get_examples": true,
+              "get_path_parameters": true,
+              "get_request_body": true,
+              "get_response_schema": true,
+              "get_rls_policies": true,
+              "get_functions": true,
+              "get_schema_info": true,
+              "get_triggers": true,
+              "get_setup_instructions": true,
+              "list_components": true,
+              "import_table_data": true,
+              "list_endpoints": true,
+              "list_security_schemes": true,
+              "monitor_database": true,
+              "puppeteer_click": false,
+              "puppeteer_evaluate": false,
+              "puppeteer_fill": false,
+              "puppeteer_hover": false,
+              "puppeteer_navigate": false,
+              "puppeteer_select": false,
+              "puppeteer_screenshot": false,
+              "search_schema": true,
+              "set_trigger_state": true,
+              "tool_registration": true
+            }
+          },
+          "mcp-server-sequential-thinking": {
+            "tools": {
+              "sequentialthinking": true
+            }
+          }
+        }
+      },
+      "write": {
+        "name": "Write",
+        "tools": {
+          "create_directory": true,
+          "bash": true,
+          "batch_tool": true,
+          "code_symbols": true,
+          "copy_path": true,
+          "create_file": true,
+          "delete_path": true,
+          "diagnostics": true,
+          "find_replace_file": true,
+          "fetch": true,
+          "list_directory": true,
+          "move_path": true,
+          "now": true,
+          "path_search": true,
+          "read_file": true,
+          "regex_search": true,
+          "symbol_info": true,
+          "thinking": true,
+          "open": true
+        },
+        "enable_all_context_servers": true
+      }
+    }
+  },
+  "always_allow_tool_actions": true,
+  "version": "2",
+  "default_model": {
+    "provider": "anthropic",
+    "model": "claude-3-7-sonnet-thinking-latest",
+    "mode": {
+      "type": "thinking",
+      "interactive": true,
+      "max_tokens": 200000,
+      "max_output_tokens": 200000,
+      "cache_configuration": {
+        "max_cache_anchors": 64,
+        "min_total_token": 64,
+        "should_speculate": true
+      },
+      "tool_override": "o3-mini-assistant"
+    }
+  },
+  "default_anthropic_model": "claude-3-7-sonnet-thinking",
+  "provider": {
+    "name": "anthropic",
+    "default_model": "claude-3-7-sonnet-thinking-latest",
+    "mode": {
+      "type": "thinking",
+      "interactive": true,
+      "max_tokens": 200000,
+      "max_output_tokens": 200000,
+      "cache_configuration": {
+        "max_cache_anchors": 64,
+        "min_total_token": 64,
+        "should_speculate": true
+      },
+      "tool_override": "o3-mini-assistant"
+    }
+  },
+  "default_google_model": {
+    "provider": {
+      "name": "google",
+      "default_model": "gemini-2.5-pro-exp-03-25"
+    },
+    "version": "1",
+    "base_keymap": "VSCode"
+  },
+  "default_mistral_model": {
+    "provider": {
+      "name": "mistral",
+      "model": "mistral-medium-latest",
+      "alterate_model": "mistral-large-latest"
+    }
+  },
+  "inline_alternatives": [
+    {
+      "provider": "zed.dev",
+      "model": "open-codestral-mamba"
+    },
+    {
+      "provider": "zed.dev",
+      "model": "open-mistral-nemo"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4.5-preview"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-3-5-haiku-latest"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-3-7-sonnet-latest"
+    }
+  ],
+  "commit_message_model": {
+    "provider": "openai",
+    "model": "gpt-4.0"
+  },
+  "thread_summary_model": {
+    "provider": "openai",
+    "model": "gpt-4.0"
+  },
+  // "language_models": {
+  //   "openai": {
+  //     "api_url": "https://api.x.ai/v1",
+  //     "available_models": [
+  //       {
+  //         "name": "grok-beta",
+  //         "display_name": "X.ai Grok (Beta)",
+  //         "max_tokens": 131072
+  //       }
+  //     ],
+  //     "version": "1"
+  //   }
+  // },
+  //
+  "language_models": {
+    "openai": {
+      "version": "1",
+      "available_models": [
+        {
+          "name": "o3-mini",
+          "display_name": "o3-mini-assistant",
+          "version": 1.0,
+          "max_tokens": 100000,
+          "assistant": {
+            "provider": "openai",
+            "model": "o3-mini"
+          }
+        }
+      ]
+    }
+  }
+}
