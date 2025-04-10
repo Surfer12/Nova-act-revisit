@@ -1,0 +1,20 @@
+schemaVersion: 2.0.0
+metadata:
+  name: mixed-lang-project
+components:
+  - name: dev
+    container:
+      image: public.ecr.aws/aws-mde/universal-image:latest
+commands:
+  - id: install
+    exec:
+      component: dev
+      commandLine: "pip install -r requirements.txt && ./gradlew dependencies && cargo fetch"
+  - id: build
+    exec:
+      component: dev
+      commandLine: "./gradlew build && cargo build && pip install -e ."
+  - id: test
+    exec:
+      component: dev
+      commandLine: "./gradlew test && cargo test && python -m pytest"
