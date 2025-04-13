@@ -49,6 +49,15 @@ public class Pattern {
     }
     
     /**
+     * Gets the pattern's name (same as ID for now).
+     * 
+     * @return The pattern name
+     */
+    public String getName() {
+        return id;
+    }
+    
+    /**
      * Gets the pattern's type.
      * 
      * @return The pattern type
@@ -82,15 +91,6 @@ public class Pattern {
      */
     public long getTimestamp() {
         return timestamp;
-    }
-    
-    /**
-     * Gets the pattern's name.
-     * 
-     * @return The pattern type as its name
-     */
-    public String getName() {
-        return type;
     }
     
     /**

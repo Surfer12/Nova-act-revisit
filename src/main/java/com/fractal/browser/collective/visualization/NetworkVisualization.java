@@ -2,6 +2,8 @@ package com.fractal.browser.collective.visualization;
 
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.function.Predicate;
+import java.util.Map;
 
 import com.fractal.browser.collective.communication.NodeDiscovery;
 
@@ -26,7 +28,7 @@ public class NetworkVisualization {
      * @return Set of node IDs
      */
     public Set<String> getAvailableNodes() {
-        Set<String> availableNodes = nodeDiscovery.discoverNodes(node -> true).keySet();
-        return availableNodes;
+        Predicate<Map<String, Object>> allNodes = node -> true;
+        return nodeDiscovery.discoverNodes(allNodes);
     }
 } 

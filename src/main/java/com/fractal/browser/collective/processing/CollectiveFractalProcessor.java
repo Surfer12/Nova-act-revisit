@@ -32,7 +32,6 @@ import com.fractal.browser.collective.communication.Insight;
  * emergent patterns through recursive, multi-scale analysis.
  * 
  * This processor implements the core fractal processing algorithm (z = z^2 + c) in a
- * This processor implements the core fractal processing algorithm (z = z� + c) in a
  * distributed context, enabling collaborative processing and insight emergence.
  */
 public class CollectiveFractalProcessor implements CollectiveProcessor {
@@ -230,17 +229,18 @@ public class CollectiveFractalProcessor implements CollectiveProcessor {
     public Map<String, List<ProcessingResult>> identifyEmergentPatterns(String contextId) {
         Map<String, List<ProcessingResult>> patterns = new HashMap<>();
         
-        // Find insights with processing results
-        List<DistributedInsightRepository.Insight> insights = insightRepository.findByTags(
-            Set.of("processing_result"), true, contextId);
-        
-        // Group results by pattern
-        for (DistributedInsightRepository.Insight insight : insights) {
-            Map<String, Object> metadata = insight.getMetadata();
-            if (metadata.containsKey("pattern")) {
-                String patternId = (String) metadata.get("pattern");
-                patterns.computeIfAbsent(patternId, k -> new ArrayList<>())
-                    .add((ProcessingResult) metadata.get("result"));
+        // Get all processing results for the context
+        for (Map<String, ProcessingResult> nodeResults : processingResults.values()) {
+            for (ProcessingResult result : nodeResults.values()) {
+                if (result.getContextId().equals(contextId)) {
+                    // Extract pattern ID from results
+                    Map<String, Object> results = result.getResults();
+                    if (results.containsKey("patternId")) {
+                        String patternId = (String) results.get("patternId");
+                        patterns.computeIfAbsent(patternId, k -> new ArrayList<>())
+                               .add(result);
+                    }
+                }
             }
         }
         
@@ -393,7 +393,7 @@ public class CollectiveFractalProcessor implements CollectiveProcessor {
             int iterations = 0;
             double convergenceValue = 0.0;
             
-            // Apply the fractal formula z = z² + c
+            // Apply the fractal formula z = z^2 + c
             while (iterations < maxIterations && Math.abs(z) < 2.0) {
                 z = z * z + c;
                 iterations++;
