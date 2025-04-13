@@ -363,49 +363,25 @@ public class InsightFlowMapper {
      * @return The created flow node
      */
     private FlowNode createFlowNodeFromInsight(Map<String, Object> insight, String contextId) {
-        String insightId = insight.getOrDefault("_id", UUID.randomUUID().toString()).toString();
-        
-        // Skip if already exists
-        if (flowNodes.containsKey(insightId)) {
-            return flowNodes.get(insightId);
-        }
-        
-        // Extract node attributes
-        String type = insight.getOrDefault("type", "insight").toString();
-        
+        String nodeId = (String) insight.get("id");
+        String type = (String) insight.get("type");
         Map<String, Object> attributes = new HashMap<>();
-        for (Map.Entry<String, Object> entry : insight.entrySet()) {
-            // Include all meaningful attributes (skip internal ones)
-            if (!entry.getKey().startsWith("_") && !entry.getKey().equals("content")) {
-                attributes.put(entry.getKey(), entry.getValue());
-            }
+        
+        // Convert Set<String> to Map<String, Object> for tags
+        Set<String> tags = (Set<String>) insight.get("tags");
+        if (tags != null) {
+            attributes.put("tags", new HashSet<>(tags));
         }
         
-        // Extract timestamp
-        Instant timestamp;
-        if (insight.containsKey("_timestamp")) {
-            Object timestampObj = insight.get("_timestamp");
-            if (timestampObj instanceof Number) {
-                timestamp = Instant.ofEpochMilli(((Number) timestampObj).longValue());
-            } else {
-                timestamp = Instant.now();
-            }
-        } else {
-            timestamp = Instant.now();
+        // Convert Map<String, Object> to Map<String, Object> for metadata
+        Map<String, Object> metadata = (Map<String, Object>) insight.get("metadata");
+        if (metadata != null) {
+            attributes.put("metadata", new HashMap<>(metadata));
         }
         
-        // Create the flow node
-        FlowNode node = new FlowNode(insightId, type, attributes, timestamp);
-        
-        // Set basic visual properties
+        Instant timestamp = Instant.ofEpochMilli(getInsightTimestamp(insight));
+        FlowNode node = new FlowNode(nodeId, type, attributes, timestamp);
         setNodeVisualProperties(node);
-        
-        // Add to related insights
-        node.getRelatedInsights().add(insightId);
-        
-        // Store in flow nodes
-        flowNodes.put(insightId, node);
-        
         return node;
     }
     
@@ -450,75 +426,25 @@ public class InsightFlowMapper {
      * @param contextId The context ID for boundary enforcement
      */
     private void createFlowEdges(List<Map<String, Object>> insights, String contextId) {
-        // Track created edges to avoid duplicates
-        Set<String> createdEdgeKeys = new HashSet<>();
-        
-        // Sort insights by timestamp for chronological analysis
-        insights.sort((i1, i2) -> {
-            long t1 = getInsightTimestamp(i1);
-            long t2 = getInsightTimestamp(i2);
-            return Long.compare(t1, t2);
-        });
-        
-        // For each insight, find related insights based on different criteria
         for (int i = 0; i < insights.size(); i++) {
-            Map<String, Object> insight = insights.get(i);
-            String insightId = insight.getOrDefault("_id", "").toString();
+            Map<String, Object> sourceInsight = insights.get(i);
+            String sourceId = (String) sourceInsight.get("id");
             
-            if (!flowNodes.containsKey(insightId)) {
-                continue;
-            }
-            
-            // 1. Temporal sequence - connect to previous insights in time
-            if (i > 0) {
-                for (int j = Math.max(0, i - 5); j < i; j++) {
-                    Map<String, Object> previousInsight = insights.get(j);
-                    String previousId = previousInsight.getOrDefault("_id", "").toString();
-                    
-                    if (flowNodes.containsKey(previousId)) {
-                        createFlowEdge(previousId, insightId, "sequence", 0.5, contextId);
-                    }
-                }
-            }
-            
-            // 2. Shared tags/attributes - connect to insights with similar attributes
-            for (int j = 0; j < insights.size(); j++) {
-                if (i == j) continue;
+            for (int j = i + 1; j < insights.size(); j++) {
+                Map<String, Object> targetInsight = insights.get(j);
+                String targetId = (String) targetInsight.get("id");
                 
-                Map<String, Object> otherInsight = insights.get(j);
-                String otherId = otherInsight.getOrDefault("_id", "").toString();
-                
-                if (!flowNodes.containsKey(otherId)) {
-                    continue;
-                }
-                
-                double similarity = calculateInsightSimilarity(insight, otherInsight);
-                if (similarity > 0.6) {
-                    createFlowEdge(insightId, otherId, "similarity", similarity, contextId);
-                }
-            }
-            
-            // 3. Referenced insights - connect if one references the other
-            if (insight.containsKey("references")) {
-                @SuppressWarnings("unchecked")
-                List<String> references = (List<String>) insight.get("references");
-                
-                for (String refId : references) {
-                    if (flowNodes.containsKey(refId)) {
-                        createFlowEdge(insightId, refId, "reference", 0.9, contextId);
-                    }
-                }
-            }
-            
-            // 4. Derived insights - connect if derived from another
-            if (insight.containsKey("derivedFrom")) {
-                @SuppressWarnings("unchecked")
-                List<String> sources = (List<String>) insight.get("derivedFrom");
-                
-                for (String sourceId : sources) {
-                    if (flowNodes.containsKey(sourceId)) {
-                        createFlowEdge(sourceId, insightId, "derivation", 1.0, contextId);
-                    }
+                double similarity = calculateInsightSimilarity(sourceInsight, targetInsight);
+                if (similarity > 0.3) { // Threshold for creating edges
+                    String edgeId = UUID.randomUUID().toString();
+                    FlowEdge edge = createFlowEdge(
+                        sourceId,
+                        targetId,
+                        "similarity",
+                        similarity,
+                        contextId
+                    );
+                    flowEdges.put(edgeId, edge);
                 }
             }
         }
@@ -640,37 +566,64 @@ public class InsightFlowMapper {
      * @return Similarity score (0.0-1.0)
      */
     private double calculateInsightSimilarity(Map<String, Object> insight1, Map<String, Object> insight2) {
-        Set<String> attrs1 = insight1.keySet().stream()
-                .filter(k -> !k.startsWith("_") && !k.equals("content"))
-                .collect(Collectors.toSet());
+        // Convert tags to Sets for comparison
+        Set<String> tags1 = new HashSet<>((Set<String>) insight1.get("tags"));
+        Set<String> tags2 = new HashSet<>((Set<String>) insight2.get("tags"));
         
-        Set<String> attrs2 = insight2.keySet().stream()
-                .filter(k -> !k.startsWith("_") && !k.equals("content"))
-                .collect(Collectors.toSet());
+        // Calculate tag similarity
+        Set<String> intersection = new HashSet<>(tags1);
+        intersection.retainAll(tags2);
+        double tagSimilarity = (double) intersection.size() / 
+            Math.max(tags1.size(), tags2.size());
         
-        // Count matching attribute keys
-        int matchingKeys = 0;
-        for (String key : attrs1) {
-            if (attrs2.contains(key)) {
-                matchingKeys++;
-                
-                // Bonus for matching values
-                Object val1 = insight1.get(key);
-                Object val2 = insight2.get(key);
-                
-                if (val1 != null && val1.equals(val2)) {
-                    matchingKeys++;
+        // Calculate content similarity (if available)
+        double contentSimilarity = 0.0;
+        if (insight1.containsKey("content") && insight2.containsKey("content")) {
+            String content1 = (String) insight1.get("content");
+            String content2 = (String) insight2.get("content");
+            contentSimilarity = calculateStringSimilarity(content1, content2);
+        }
+        
+        // Weighted combination of similarities
+        return 0.7 * tagSimilarity + 0.3 * contentSimilarity;
+    }
+    
+    private double calculateStringSimilarity(String str1, String str2) {
+        // Simple string similarity calculation
+        if (str1 == null || str2 == null) return 0.0;
+        if (str1.equals(str2)) return 1.0;
+        
+        int maxLength = Math.max(str1.length(), str2.length());
+        if (maxLength == 0) return 0.0;
+        
+        int editDistance = calculateEditDistance(str1, str2);
+        return 1.0 - ((double) editDistance / maxLength);
+    }
+    
+    private int calculateEditDistance(String str1, String str2) {
+        int[][] dp = new int[str1.length() + 1][str2.length() + 1];
+        
+        for (int i = 0; i <= str1.length(); i++) {
+            dp[i][0] = i;
+        }
+        for (int j = 0; j <= str2.length(); j++) {
+            dp[0][j] = j;
+        }
+        
+        for (int i = 1; i <= str1.length(); i++) {
+            for (int j = 1; j <= str2.length(); j++) {
+                if (str1.charAt(i - 1) == str2.charAt(j - 1)) {
+                    dp[i][j] = dp[i - 1][j - 1];
+                } else {
+                    dp[i][j] = 1 + Math.min(
+                        Math.min(dp[i - 1][j], dp[i][j - 1]),
+                        dp[i - 1][j - 1]
+                    );
                 }
             }
         }
         
-        // Calculate Jaccard similarity
-        int totalAttrs = attrs1.size() + attrs2.size() - matchingKeys;
-        if (totalAttrs == 0) {
-            return 0.0;
-        }
-        
-        return (double) matchingKeys / totalAttrs;
+        return dp[str1.length()][str2.length()];
     }
     
     /**

@@ -200,8 +200,8 @@ public class ConsensusFormation {
         
         // Count participating nodes
         int totalParticipants = votes.size();
-        int votedParticipants = (int) votes.values().stream()
-                .filter(v -> !v.isEmpty())
+        int votedParticipants = (int) votes.entrySet().stream()
+                .filter(entry -> !entry.getValue().isEmpty())
                 .count();
         
         // Update participation rate
@@ -270,8 +270,8 @@ public class ConsensusFormation {
         
         // Count participating nodes
         int totalParticipants = votes.size();
-        int votedParticipants = (int) votes.values().stream()
-                .filter(v -> !v.isEmpty())
+        int votedParticipants = (int) votes.entrySet().stream()
+                .filter(entry -> !entry.getValue().isEmpty())
                 .count();
         
         // Advance if we've waited long enough and have some participation

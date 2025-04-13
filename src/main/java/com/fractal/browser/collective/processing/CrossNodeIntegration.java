@@ -158,7 +158,7 @@ public class CrossNodeIntegration {
             
             // Store the integrated results in the repository
             String resultId = insightRepository.storeInsight(
-                    topic + "_integration", results, tags, contextId);
+                    topic + "_integration", contextId, tags, results, 1.0);
             integrationMetadata.put("resultId", resultId);
             
             // Broadcast the results for synchronization

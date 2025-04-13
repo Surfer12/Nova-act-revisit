@@ -50,8 +50,8 @@ public class EmergentPatternDisplay {
     public static class PatternNode {
         private final String nodeId;
         private final Pattern pattern;
-        private final double x;
-        private final double y;
+        private double x;
+        private double y;
         private double size;
         private String color;
         private double rotation;
@@ -75,7 +75,9 @@ public class EmergentPatternDisplay {
         public String getNodeId() { return nodeId; }
         public Pattern getPattern() { return pattern; }
         public double getX() { return x; }
+        public void setX(double x) { this.x = x; }
         public double getY() { return y; }
+        public void setY(double y) { this.y = y; }
         public double getSize() { return size; }
         public void setSize(double size) { this.size = size; }
         public String getColor() { return color; }
