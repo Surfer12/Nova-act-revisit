@@ -2,6 +2,7 @@ package com.fractal.browser.collective.processing;
 
 import com.fractal.browser.model.SemanticInstruction;
 import com.fractal.browser.processing.ProcessingResult;
+import com.fractal.browser.processing.FractalProcessor;
 import java.util.Map;
 import java.util.Set;
 import java.util.List;

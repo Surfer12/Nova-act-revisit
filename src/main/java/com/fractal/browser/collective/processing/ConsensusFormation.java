@@ -413,60 +413,45 @@ public class ConsensusFormation {
      * @return A map of pattern metrics
      */
     public Map<String, Object> analyzeConsensusPatterns(String contextId) {
-        Map<String, Object> patternAnalysis = new HashMap<>();
+        Map<String, Object> analysis = new HashMap<>();
         
-        // Filter sessions by boundary access
-        List<String> accessibleSessions = activeSessions.entrySet().stream()
-                .filter(entry -> {
-                    String sessionContextId = (String) entry.getValue().get("contextId");
-                    return sessionContextId.equals(contextId) || 
-                            boundary.canInformationPass(entry.getKey(), contextId);
-                })
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-        
-        // Count sessions by status
-        Map<String, AtomicInteger> statusCounts = new HashMap<>();
-        for (String sessionId : accessibleSessions) {
-            Map<String, Object> session = activeSessions.get(sessionId);
-            String status = (String) session.get("status");
+        // Collect all session votes
+        Map<String, Map<String, Double>> allVotes = new HashMap<>();
+        for (Map.Entry<String, Map<String, Map<String, Double>>> sessionEntry : sessionVotes.entrySet()) {
+            String sessionId = sessionEntry.getKey();
+            Map<String, Map<String, Double>> nodeVotes = sessionEntry.getValue();
             
-            statusCounts.computeIfAbsent(status, k -> new AtomicInteger(0))
-                    .incrementAndGet();
+            // Aggregate votes across nodes
+            Map<String, Double> aggregatedVotes = new HashMap<>();
+            for (Map.Entry<String, Map<String, Double>> nodeEntry : nodeVotes.entrySet()) {
+                Map<String, Double> votes = nodeEntry.getValue();
+                for (Map.Entry<String, Double> voteEntry : votes.entrySet()) {
+                    String option = voteEntry.getKey();
+                    double weight = voteEntry.getValue();
+                    aggregatedVotes.merge(option, weight, Double::sum);
+                }
+            }
+            allVotes.put(sessionId, aggregatedVotes);
         }
         
-        patternAnalysis.put("statusCounts", statusCounts);
+        // Analyze voting patterns
+        Map<String, Double> optionFrequencies = new HashMap<>();
+        Map<String, Double> optionCorrelations = new HashMap<>();
         
-        // Calculate average rounds to consensus
-        double avgRounds = accessibleSessions.stream()
-                .filter(sid -> "COMPLETED".equals(activeSessions.get(sid).get("status")))
-                .mapToInt(sid -> (int) activeSessions.get(sid).get("currentRound"))
-                .average()
-                .orElse(0);
+        for (Map.Entry<String, Map<String, Double>> sessionEntry : allVotes.entrySet()) {
+            Map<String, Double> votes = sessionEntry.getValue();
+            for (Map.Entry<String, Double> voteEntry : votes.entrySet()) {
+                String option = voteEntry.getKey();
+                double weight = voteEntry.getValue();
+                optionFrequencies.merge(option, 1.0, Double::sum);
+                optionCorrelations.merge(option, weight, Double::sum);
+            }
+        }
         
-        patternAnalysis.put("averageRoundsToConsensus", avgRounds);
+        analysis.put("optionFrequencies", optionFrequencies);
+        analysis.put("optionCorrelations", optionCorrelations);
         
-        // Calculate average participation rate
-        double avgParticipation = accessibleSessions.stream()
-                .mapToDouble(sid -> (double) activeSessions.get(sid).getOrDefault("participationRate", 0.0))
-                .average()
-                .orElse(0);
-        
-        patternAnalysis.put("averageParticipationRate", avgParticipation);
-        
-        // Identify common consensus options
-        Map<String, Integer> optionFrequency = new HashMap<>();
-        
-        accessibleSessions.stream()
-                .filter(sid -> "COMPLETED".equals(activeSessions.get(sid).get("status")))
-                .forEach(sid -> {
-                    String option = (String) activeSessions.get(sid).get("consensusOption");
-                    optionFrequency.put(option, optionFrequency.getOrDefault(option, 0) + 1);
-                });
-        
-        patternAnalysis.put("optionFrequency", optionFrequency);
-        
-        return patternAnalysis;
+        return analysis;
     }
     
     /**

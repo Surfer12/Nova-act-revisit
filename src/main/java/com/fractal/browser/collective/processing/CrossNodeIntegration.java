@@ -187,33 +187,32 @@ public class CrossNodeIntegration {
         
         Map<String, List<Map<String, Object>>> nodeInsights = new HashMap<>();
         
-        // Discover available nodes
+        // Get participating nodes
         Set<String> nodes = nodeDiscovery.discoverNodes(node -> true).stream()
                 .filter(nodeId -> nodeDiscovery.isNodeAvailable(nodeId))
                 .collect(Collectors.toSet());
         
         // Collect insights from each node
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-        
         for (String nodeId : nodes) {
-            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                try {
-                    // Exchange insights with the node, filtered by tags
-                    List<Map<String, Object>> insights = insightExchange.exchangeInsights(
-                            nodeId, tags, contextId);
-                    
-                    nodeInsights.put(nodeId, insights);
-                } catch (Exception e) {
-                    // Log error and continue with other nodes
-                    nodeInsights.put(nodeId, new ArrayList<>());
+            try {
+                // Exchange insights with the node
+                List<Map<String, Object>> insights = insightExchange.exchangeInsights(
+                        nodeId, tags, contextId);
+                
+                // Filter insights based on boundary access
+                List<Map<String, Object>> accessibleInsights = insights.stream()
+                        .filter(insight -> canAccessInsight(insight, contextId))
+                        .collect(Collectors.toList());
+                
+                if (!accessibleInsights.isEmpty()) {
+                    nodeInsights.put(nodeId, accessibleInsights);
                 }
-            }, integrationExecutor);
-            
-            futures.add(future);
+                
+            } catch (FractalBrowserException e) {
+                // Log error and continue with other nodes
+                System.err.println("Error collecting insights from node " + nodeId + ": " + e.getMessage());
+            }
         }
-        
-        // Wait for all insight collection to complete
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         
         return nodeInsights;
     }
@@ -249,81 +248,42 @@ public class CrossNodeIntegration {
         
         Map<String, Object> results = new HashMap<>();
         
-        // Base case: max depth reached
+        // Base case: reached maximum depth
         if (currentDepth >= maxDepth) {
-            // Perform flat integration at the leaf level
             return flattenAndMergeInsights(nodeInsights, contextId);
         }
         
-        // Group insights by attributes to identify clusters
-        Map<String, List<Map<String, Object>>> attributeClusters = new HashMap<>();
-        
-        // Flatten all node insights for clustering
-        List<Map<String, Object>> allInsights = new ArrayList<>();
-        for (List<Map<String, Object>> insights : nodeInsights.values()) {
-            allInsights.addAll(insights);
-        }
-        
-        // Group by attributes (simplified clustering)
-        for (Map<String, Object> insight : allInsights) {
-            // Skip insights that don't pass boundary checks
-            if (!canAccessInsight(insight, contextId)) {
-                continue;
-            }
-            
-            // Extract all attribute keys
-            for (String key : insight.keySet()) {
-                if (key.startsWith("_") || key.equals("content")) {
-                    continue; // Skip metadata and content fields
-                }
-                
-                Object value = insight.get(key);
-                String clusterKey = key + ":" + (value != null ? value.toString() : "null");
-                
-                attributeClusters.computeIfAbsent(clusterKey, k -> new ArrayList<>())
-                        .add(insight);
-            }
-        }
-        
-        // For each significant cluster, recursively integrate
-        Map<String, Object> subIntegrations = new HashMap<>();
-        
-        for (Map.Entry<String, List<Map<String, Object>>> entry : attributeClusters.entrySet()) {
-            String clusterKey = entry.getKey();
-            List<Map<String, Object>> clusterInsights = entry.getValue();
-            
-            // Only process clusters with enough insights
-            if (clusterInsights.size() < 3) {
-                continue;
-            }
-            
-            // Group these insights by node for recursive integration
-            Map<String, List<Map<String, Object>>> clusterByNode = new HashMap<>();
-            
-            for (Map<String, Object> insight : clusterInsights) {
-                String nodeId = (String) insight.getOrDefault("_nodeId", "unknown");
-                
-                clusterByNode.computeIfAbsent(nodeId, k -> new ArrayList<>())
-                        .add(insight);
-            }
-            
-            // Recursively integrate this cluster
-            Map<String, Object> clusterResults = integrateRecursively(
-                    clusterByNode, 
-                    topic + "_" + clusterKey,
-                    currentDepth + 1,
-                    maxDepth,
-                    contextId);
-            
-            subIntegrations.put(clusterKey, clusterResults);
-        }
-        
-        // Combine flat integration with recursive results
+        // Flatten and merge insights at current depth
         Map<String, Object> flatResults = flattenAndMergeInsights(nodeInsights, contextId);
         
-        results.put("direct_integration", flatResults);
-        results.put("hierarchical_integration", subIntegrations);
-        results.put("meta_patterns", identifyMetaPatterns(flatResults, subIntegrations));
+        // Identify meta-patterns
+        Map<String, Object> metaPatterns = identifyMetaPatterns(flatResults, new HashMap<>());
+        
+        // Store meta-patterns as new insights
+        for (Map.Entry<String, Object> patternEntry : metaPatterns.entrySet()) {
+            String patternId = patternEntry.getKey();
+            Map<String, Object> patternData = (Map<String, Object>) patternEntry.getValue();
+            
+            // Create insight metadata
+            Map<String, Object> insightMetadata = new HashMap<>();
+            insightMetadata.put("id", patternId);
+            insightMetadata.put("type", "meta-pattern");
+            insightMetadata.put("data", patternData);
+            insightMetadata.put("depth", currentDepth);
+            insightMetadata.put("contextId", contextId);
+            
+            // Store the insight
+            insightRepository.storeInsight(insightMetadata, contextId);
+        }
+        
+        // Recursive case: integrate at next depth
+        Map<String, Object> nextLevelResults = integrateRecursively(
+                nodeInsights, topic, currentDepth + 1, maxDepth, contextId);
+        
+        // Combine results
+        results.put("flatResults", flatResults);
+        results.put("metaPatterns", metaPatterns);
+        results.put("nextLevelResults", nextLevelResults);
         
         return results;
     }

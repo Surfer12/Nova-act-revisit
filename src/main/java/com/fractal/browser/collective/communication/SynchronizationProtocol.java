@@ -358,13 +358,30 @@ public class SynchronizationProtocol implements SynchronizationProtocolInterface
     }
     
     /**
+     * Synchronizes data across nodes
+     * @param dataType The type of data to synchronize
+     * @param contextId The context identifier
+     */
+    @Override
+    public void synchronizeDataType(String dataType, String contextId) {
+        // Create a new sync session for this operation
+        String sessionId = UUID.randomUUID().toString();
+        SyncSession session = new SyncSession(contextId, "self", Set.of(dataType));
+        activeSessions.put(sessionId, session);
+        
+        // Perform synchronization
+        SyncSession.SyncResult result = performDataTypeSynchronization(sessionId, dataType);
+        session.recordResult(result);
+    }
+    
+    /**
      * Synchronizes data of a specific type with a remote node.
      * 
      * @param sessionId The synchronization session ID
      * @param dataType The type of data to synchronize
      * @return The result of the synchronization
      */
-    public SyncSession.SyncResult synchronizeDataType(String sessionId, String dataType) {
+    public SyncSession.SyncResult performDataTypeSynchronization(String sessionId, String dataType) {
         if (!activeSessions.containsKey(sessionId)) {
             return new SyncSession.SyncResult(dataType, false, 0, 0, 0, "Session not found");
         }
@@ -408,7 +425,7 @@ public class SynchronizationProtocol implements SynchronizationProtocolInterface
      * @param contextId The context identifier
      * @return The result of the synchronization
      */
-    public SyncSession.SyncResult synchronizeDataType(String dataType, Map<String, Object> data, String contextId) {
+    public SyncSession.SyncResult synchronizeDataTypeWithContent(String dataType, Map<String, Object> data, String contextId) {
         // Create a unique session for this synchronization
         String sessionId = UUID.randomUUID().toString();
         
@@ -601,12 +618,6 @@ public class SynchronizationProtocol implements SynchronizationProtocolInterface
         }
         
         return cleanedCount;
-    }
-
-    @Override
-    public void synchronizeDataType(String dataType, String contextId) {
-        // Implementation of interface method
-        synchronizeDataType(dataType, new HashMap<>(), contextId);
     }
 
     @Override

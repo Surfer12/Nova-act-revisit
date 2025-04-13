@@ -188,86 +188,57 @@ public class CollectiveFractalProcessor implements CollectiveProcessor {
      * @return The aggregated result
      */
     private ProcessingResult aggregateResults(String processingId, String contextId) {
-        Map<String, ProcessingResult> results = processingResults.get(processingId);
-        
-        // Calculate the average number of iterations
-        double avgIterations = results.values().stream()
-                .mapToInt(r -> r.getIterations())
-                .average()
-                .orElse(0);
-        
-        // Calculate the average convergence value
-        double avgConvergence = results.values().stream()
-                .mapToDouble(r -> r.getConvergenceValue())
-                .average()
-                .orElse(0);
-        
-        // Aggregate result parameters using a consensus approach
-        Map<String, Object> aggregatedResults = new HashMap<>();
-        
-        // Identify all result parameters
-        Set<String> allParams = new HashSet<>();
-        results.values().forEach(r -> allParams.addAll(r.getResults().keySet()));
-        
-        // For each parameter, calculate consensus
-        for (String param : allParams) {
-            // Collect all values and their frequencies
-            Map<Object, Integer> valueCounts = new HashMap<>();
-            
-            for (ProcessingResult result : results.values()) {
-                Object value = result.getResults().get(param);
-                if (value != null) {
-                    valueCounts.put(value, valueCounts.getOrDefault(value, 0) + 1);
-                }
-            }
-            
-            // Find the value with the highest frequency
-            Optional<Map.Entry<Object, Integer>> consensus = valueCounts.entrySet().stream()
-                    .max((e1, e2) -> e1.getValue().compareTo(e2.getValue()));
-            
-            if (consensus.isPresent()) {
-                Map.Entry<Object, Integer> entry = consensus.get();
-                double consensusPercentage = 100.0 * entry.getValue() / results.size();
-                
-                // Include the value if it meets the consensus threshold
-                if (consensusPercentage >= consensusThreshold) {
-                    aggregatedResults.put(param, entry.getKey());
-                    
-                    // Also include the confidence level
-                    aggregatedResults.put(param + "_confidence", consensusPercentage / 100.0);
-                }
-            }
+        Map<String, ProcessingResult> nodeResults = processingResults.get(processingId);
+        if (nodeResults == null || nodeResults.isEmpty()) {
+            throw new FractalBrowserException("No results found for processing ID: " + processingId);
         }
         
-        // Remove the results from the tracking map
-        processingResults.remove(processingId);
+        // Aggregate results using fractal aggregation
+        ProcessingResult aggregatedResult = new ProcessingResult();
+        aggregatedResult.setContextId(contextId);
         
-        // Construct and return the aggregate result
-        return new ProcessingResult(aggregatedResults, (int) Math.round(avgIterations), avgConvergence);
+        // Calculate average convergence value
+        double avgConvergence = nodeResults.values().stream()
+            .mapToDouble(ProcessingResult::getConvergenceValue)
+            .average()
+            .orElse(0.0);
+        
+        // Calculate total iterations
+        int totalIterations = nodeResults.values().stream()
+            .mapToInt(ProcessingResult::getIterations)
+            .sum();
+        
+        // Create aggregated results map
+        Map<String, Object> aggregatedResults = new HashMap<>();
+        aggregatedResults.put("nodeCount", nodeResults.size());
+        aggregatedResults.put("averageConvergence", avgConvergence);
+        aggregatedResults.put("totalIterations", totalIterations);
+        aggregatedResults.put("nodeResults", nodeResults);
+        
+        aggregatedResult.setResults(aggregatedResults);
+        aggregatedResult.setIterations(totalIterations);
+        aggregatedResult.setConvergenceValue(avgConvergence);
+        
+        return aggregatedResult;
     }
     
     @Override
     public Map<String, List<ProcessingResult>> identifyEmergentPatterns(String contextId) {
         Map<String, List<ProcessingResult>> patterns = new HashMap<>();
         
-        // Get all results for the context
-        List<ProcessingResult> contextResults = processingResults.values().stream()
-            .flatMap(nodeResults -> nodeResults.values().stream())
-            .filter(result -> result.getContextId().map(id -> id.equals(contextId)).orElse(false))
-            .collect(Collectors.toList());
+        // Find insights with processing results
+        List<DistributedInsightRepository.Insight> insights = insightRepository.findByTags(
+            Set.of("processing_result"), true, contextId);
         
-        // Analyze self-similarity
-        Map<String, Double> similarityScores = analyzeSelfSimilarity(contextResults, contextId);
-        
-        // Group results by similarity
-        similarityScores.forEach((patternId, score) -> {
-            if (score >= convergenceThreshold) {
+        // Group results by pattern
+        for (DistributedInsightRepository.Insight insight : insights) {
+            Map<String, Object> metadata = insight.getMetadata();
+            if (metadata.containsKey("pattern")) {
+                String patternId = (String) metadata.get("pattern");
                 patterns.computeIfAbsent(patternId, k -> new ArrayList<>())
-                    .addAll(contextResults.stream()
-                        .filter(result -> result.getResults().get("patternId").equals(patternId))
-                        .collect(Collectors.toList()));
+                    .add((ProcessingResult) metadata.get("result"));
             }
-        });
+        }
         
         return patterns;
     }
@@ -401,20 +372,50 @@ public class CollectiveFractalProcessor implements CollectiveProcessor {
         processingExecutor.shutdown();
     }
 
-    public void processCollectively(String contextId) {
-        Set<String> availableNodes = nodeDiscovery.discoverNodes(node -> true);
-        
-        for (String nodeId : availableNodes) {
-            if (nodeDiscovery.isNodeAvailable(nodeId)) {
-                processNode(nodeId, contextId);
-            }
-        }
-        
-        List<Map<String, Object>> recentResults = insightRepository.findByTag("processing_result", contextId)
-            .stream()
-            .map(Insight::toMap)
-            .collect(Collectors.toList());
+    @Override
+    public ProcessingResult processNode(SemanticInstruction instruction, String nodeId, String contextId) {
+        try {
+            // Transform instruction for the specific node
+            SemanticInstruction transformedInstruction = transformInstructionForNode(instruction, nodeId, contextId);
             
-        synchronizationProtocol.synchronizeDataType("processing_results", contextId);
+            // Process the instruction
+            ProcessingResult result = new ProcessingResult();
+            result.setContextId(contextId);
+            
+            // Initialize z and c from the instruction
+            double z = transformedInstruction.getInitialValue();
+            double c = transformedInstruction.getConstantValue();
+            
+            int iterations = 0;
+            double convergenceValue = 0.0;
+            
+            // Apply the fractal formula z = z² + c
+            while (iterations < maxIterations && Math.abs(z) < 2.0) {
+                z = z * z + c;
+                iterations++;
+                
+                // Calculate convergence value
+                convergenceValue = Math.abs(z);
+                if (convergenceValue < convergenceThreshold) {
+                    break;
+                }
+            }
+            
+            // Store results
+            Map<String, Object> results = new HashMap<>();
+            results.put("finalValue", z);
+            results.put("iterations", iterations);
+            results.put("convergenceValue", convergenceValue);
+            results.put("converged", convergenceValue < convergenceThreshold);
+            results.put("nodeId", nodeId);
+            
+            result.setResults(results);
+            result.setIterations(iterations);
+            result.setConvergenceValue(convergenceValue);
+            
+            return result;
+        } catch (Exception e) {
+            throw new FractalBrowserException("Failed to process node " + nodeId, e);
+        }
     }
 }
