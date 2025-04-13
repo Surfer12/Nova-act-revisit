@@ -110,9 +110,6 @@ public class ConsensusFormation {
         }
         
         // Broadcast session creation
-        Map<String, Object> sessionInfo = new HashMap<>(sessionMetadata);
-        sessionInfo.put("sessionId", sessionId);
-        
         synchronizationProtocol.synchronizeDataType("consensus_sessions", sessionId);
         
         return sessionId;
@@ -248,10 +245,7 @@ public class ConsensusFormation {
             }
             
             // Broadcast updated session state
-            Map<String, Object> sessionUpdate = new HashMap<>(session);
-            sessionUpdate.put("sessionId", sessionId);
-            
-            synchronizationProtocol.synchronizeDataType("consensus_sessions", sessionUpdate, contextId);
+            synchronizationProtocol.synchronizeDataType("consensus_sessions", sessionId);
         }
     }
     

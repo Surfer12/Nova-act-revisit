@@ -41,6 +41,8 @@ public class EmergentPatternDetector {
     // Pattern tracking
     private final Map<String, Pattern> detectedPatterns;
     
+    private final int maxInsights = 100;
+    
     /**
      * Creates a new EmergentPatternDetector instance.
      * 
@@ -579,11 +581,28 @@ public class EmergentPatternDetector {
                     .stream()
                     .map(id -> insightRepository.getInsight(id, contextId))
                     .filter(Optional::isPresent)
-                    .map(Optional::get)
+                    .map(insight -> {
+                        Map<String, Object> data = new HashMap<>();
+                        data.put("id", insight.get().getId());
+                        data.put("type", insight.get().getType());
+                        data.put("attributes", insight.get().getAttributes());
+                        data.put("timestamp", insight.get().getTimestamp());
+                        return data;
+                    })
                     .collect(Collectors.toList());
         } else {
             // Fall back to repository's recent items functionality
-            return insightRepository.findRecent(100, contextId);
+            return insightRepository.getRecentInsights(maxInsights, contextId)
+                .stream()
+                .map(insight -> {
+                    Map<String, Object> data = new HashMap<>();
+                    data.put("id", insight.getId());
+                    data.put("type", insight.getType());
+                    data.put("attributes", insight.getAttributes());
+                    data.put("timestamp", insight.getTimestamp());
+                    return data;
+                })
+                .collect(Collectors.toList());
         }
     }
     

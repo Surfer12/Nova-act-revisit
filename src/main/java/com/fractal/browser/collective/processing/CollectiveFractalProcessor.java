@@ -124,14 +124,18 @@ public class CollectiveFractalProcessor implements CollectiveProcessor {
             String processingId = generateProcessingId(instruction);
             processingResults.putIfAbsent(processingId, new ConcurrentHashMap<>());
             
-            // Discover available nodes
-            Set<String> availableNodes = discoverNodes(node -> true);
-            if (availableNodes.size() < minNodeParticipation) {
+            // Get participating nodes
+            Set<String> nodes = nodeDiscovery.discoverNodes(node -> true);
+            nodes = nodes.stream()
+                    .filter(nodeId -> nodeDiscovery.isNodeAvailable(nodeId))
+                    .collect(Collectors.toSet());
+            
+            if (nodes.size() < minNodeParticipation) {
                 throw new FractalBrowserException("Insufficient nodes available for collective processing");
             }
             
             // Distribute processing across nodes
-            List<CompletableFuture<ProcessingResult>> futures = availableNodes.stream()
+            List<CompletableFuture<ProcessingResult>> futures = nodes.stream()
                 .map(nodeId -> CompletableFuture.supplyAsync(() -> {
                     try {
                         SemanticInstruction transformedInstruction = transformInstructionForNode(instruction, nodeId, contextId);

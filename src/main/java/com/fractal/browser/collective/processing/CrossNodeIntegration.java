@@ -116,14 +116,10 @@ public class CrossNodeIntegration {
         
         integrationMetadata.put("participatingNodes", new HashSet<>(nodes));
         
-        // Store the insight
-        String insightId = insightRepository.storeInsight(
-            integrationId,
-            contextId,
-            tags,
-            integrationMetadata,
-            1.0
-        );
+        // Launch the integration process asynchronously
+        CompletableFuture.runAsync(() -> 
+            performIntegration(integrationId, topic, tags, maxDepth, contextId),
+            integrationExecutor);
         
         // Broadcast the integration
         synchronizationProtocol.synchronizeDataType("integration_results", integrationId);
@@ -166,14 +162,15 @@ public class CrossNodeIntegration {
             
             // Store the integrated results in the repository
             String resultId = insightRepository.storeInsight(
-                    topic + "_integration", contextId, tags, results, 1.0);
+                    integrationId,
+                    contextId,
+                    tags,
+                    results,
+                    1.0);
             integrationMetadata.put("resultId", resultId);
             
-            // Broadcast the results for synchronization
-            synchronizationProtocol.synchronizeDataType(
-                    "integration_results", 
-                    Map.of("integrationId", integrationId, "resultId", resultId),
-                    contextId);
+            // Broadcast the results
+            synchronizationProtocol.synchronizeDataType("integration_results", integrationId);
             
         } catch (Exception e) {
             Map<String, Object> integrationMetadata = activeIntegrations.get(integrationId);
@@ -196,7 +193,8 @@ public class CrossNodeIntegration {
         Map<String, List<Map<String, Object>>> nodeInsights = new HashMap<>();
         
         // Get participating nodes
-        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true).stream()
+        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true);
+        nodes = nodes.stream()
                 .filter(nodeId -> nodeDiscovery.isNodeAvailable(nodeId))
                 .collect(Collectors.toSet());
         
@@ -205,7 +203,17 @@ public class CrossNodeIntegration {
             try {
                 // Exchange insights with the node
                 List<Map<String, Object>> insights = insightExchange.exchangeInsights(
-                        nodeId, tags, contextId);
+                        nodeId, tags, contextId)
+                        .stream()
+                        .map(insight -> {
+                            Map<String, Object> data = new HashMap<>();
+                            data.put("id", insight.getId());
+                            data.put("type", insight.getType());
+                            data.put("attributes", insight.getAttributes());
+                            data.put("timestamp", insight.getTimestamp());
+                            return data;
+                        })
+                        .collect(Collectors.toList());
                 
                 // Filter insights based on boundary access
                 List<Map<String, Object>> accessibleInsights = insights.stream()
