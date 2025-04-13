@@ -1,9 +1,12 @@
 package com.fractal.browser.collective.boundaries;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.HashSet;
+import java.util.Locale;
+import java.util.ResourceBundle;
+import java.text.MessageFormat;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
@@ -20,31 +23,49 @@ public class PrivacyFilter {
     
     private final Map<String, Pattern> sensitivePatterns;
     private final Set<String> sensitiveTerms;
-    private boolean strictFilteringEnabled;
-    private int privacyLevel; // 1-5, where 5 is most restrictive
+    private volatile boolean strictFilteringEnabled;
+    private volatile int privacyLevel; // 1-5, where 5 is most restrictive
+    private final ResourceBundle messages;
+    private final Locale locale;
     
     /**
      * Creates a new PrivacyFilter with default settings (medium privacy level).
      */
     public PrivacyFilter() {
-        this.sensitivePatterns = new HashMap<>();
-        this.sensitiveTerms = new HashSet<>();
-        this.strictFilteringEnabled = false;
-        this.privacyLevel = 3; // Default medium privacy level
-        
-        initializeDefaultPatterns();
+        this(Locale.getDefault());
     }
-    
+
     /**
      * Creates a new PrivacyFilter with specific privacy level.
      * 
      * @param privacyLevel The privacy level (1-5) where 5 is most restrictive
      */
     public PrivacyFilter(int privacyLevel) {
-        this.sensitivePatterns = new HashMap<>();
-        this.sensitiveTerms = new HashSet<>();
+        this(privacyLevel, Locale.getDefault());
+    }
+
+    /**
+     * Creates a new PrivacyFilter with default settings and specified locale.
+     * 
+     * @param locale The locale to use for internationalization
+     */
+    public PrivacyFilter(Locale locale) {
+        this(3, locale); // Default medium privacy level
+    }
+
+    /**
+     * Creates a new PrivacyFilter with specific privacy level and locale.
+     * 
+     * @param privacyLevel The privacy level (1-5) where 5 is most restrictive
+     * @param locale The locale to use for internationalization
+     */
+    public PrivacyFilter(int privacyLevel, Locale locale) {
+        this.sensitivePatterns = new ConcurrentHashMap<>();
+        this.sensitiveTerms = new ConcurrentSkipListSet<>(String.CASE_INSENSITIVE_ORDER);
         this.strictFilteringEnabled = false;
         this.privacyLevel = Math.max(1, Math.min(5, privacyLevel));
+        this.locale = locale;
+        this.messages = ResourceBundle.getBundle("PrivacyFilter", locale);
         
         initializeDefaultPatterns();
     }
@@ -55,17 +76,17 @@ public class PrivacyFilter {
     private void initializeDefaultPatterns() {
         // Email pattern
         sensitivePatterns.put("email", 
-            Pattern.compile("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"));
+            Pattern.compile(messages.getString("pattern.email")));
         
-        // Phone number pattern (simplified)
+        // Phone number pattern
         sensitivePatterns.put("phone", 
-            Pattern.compile("\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}"));
+            Pattern.compile(messages.getString("pattern.phone")));
         
         // Add default sensitive terms
-        sensitiveTerms.add("password");
-        sensitiveTerms.add("secret");
-        sensitiveTerms.add("private");
-        sensitiveTerms.add("confidential");
+        sensitiveTerms.add(messages.getString("term.password"));
+        sensitiveTerms.add(messages.getString("term.secret"));
+        sensitiveTerms.add(messages.getString("term.private"));
+        sensitiveTerms.add(messages.getString("term.confidential"));
     }
     
     /**
@@ -96,7 +117,10 @@ public class PrivacyFilter {
      * @return true if added, false if it already exists
      */
     public boolean addSensitiveTerm(String term) {
-        return sensitiveTerms.add(term.toLowerCase());
+        if (term == null || term.isEmpty()) {
+            return false;
+        }
+        return sensitiveTerms.add(term.toLowerCase(locale));
     }
     
     /**
@@ -133,16 +157,22 @@ public class PrivacyFilter {
         
         // Apply pattern-based filtering
         for (Map.Entry<String, Pattern> entry : sensitivePatterns.entrySet()) {
-            Matcher matcher = entry.getValue().matcher(result);
-            result = matcher.replaceAll("[REDACTED-" + entry.getKey().toUpperCase() + "]");
+            Pattern pattern = entry.getValue();
+            if (pattern != null) {
+                Matcher matcher = pattern.matcher(result);
+                result = matcher.replaceAll(messages.getString("redacted." + entry.getKey()));
+            }
         }
         
         // Apply term-based filtering if privacy level is high enough
         if (privacyLevel >= 3) {
-            for (String term : sensitiveTerms) {
-                // Case insensitive replace
-                String pattern = "(?i)" + Pattern.quote(term);
-                result = result.replaceAll(pattern, "[REDACTED-TERM]");
+            // Create a copy of the terms to avoid concurrent modification
+            for (String term : sensitiveTerms.toArray(new String[0])) {
+                if (term != null) {
+                    // Case insensitive replace using the current locale
+                    String pattern = "(?i)" + Pattern.quote(term);
+                    result = result.replaceAll(pattern, messages.getString("redacted.term"));
+                }
             }
         }
         
@@ -150,7 +180,7 @@ public class PrivacyFilter {
         if (privacyLevel >= 4) {
             // For high privacy levels, redact numeric sequences that might be sensitive
             if (strictFilteringEnabled) {
-                result = result.replaceAll("\\b\\d{4,}\\b", "[REDACTED-NUMBER]");
+                result = result.replaceAll("\\b\\d{4,}\\b", messages.getString("redacted.number"));
             }
         }
         
@@ -170,14 +200,17 @@ public class PrivacyFilter {
         
         // Check patterns
         for (Pattern pattern : sensitivePatterns.values()) {
-            if (pattern.matcher(content).find()) {
+            if (pattern != null && pattern.matcher(content).find()) {
                 return true;
             }
         }
         
-        // Check terms
-        for (String term : sensitiveTerms) {
-            if (content.toLowerCase().contains(term)) {
+        // Convert content to lowercase using the current locale for comparison
+        String lowerContent = content.toLowerCase(locale);
+        
+        // Check terms using a snapshot to avoid concurrent modification
+        for (String term : sensitiveTerms.toArray(new String[0])) {
+            if (term != null && lowerContent.contains(term.toLowerCase(locale))) {
                 return true;
             }
         }
@@ -201,21 +234,42 @@ public class PrivacyFilter {
      * @return A composite filter that combines both protections
      */
     public PrivacyFilter integrateWithSafetyContainer(SafetyContainer container) {
+        if (container == null) {
+            return this;
+        }
+
         // Create a new filter with the higher privacy level between the two
         PrivacyFilter compositeFilter = new PrivacyFilter(
-            Math.max(this.privacyLevel, container.getSafetyLevel()));
+            Math.max(this.privacyLevel, container.getSafetyLevel()),
+            this.locale);
         
-        // Copy all patterns and terms from this filter
+        // Copy all patterns and terms from this filter atomically
         for (Map.Entry<String, Pattern> entry : this.sensitivePatterns.entrySet()) {
-            compositeFilter.sensitivePatterns.put(entry.getKey(), entry.getValue());
+            if (entry.getKey() != null && entry.getValue() != null) {
+                compositeFilter.sensitivePatterns.put(entry.getKey(), entry.getValue());
+            }
         }
-        compositeFilter.sensitiveTerms.addAll(this.sensitiveTerms);
+        
+        // Add all terms atomically
+        for (String term : this.sensitiveTerms.toArray(new String[0])) {
+            if (term != null) {
+                compositeFilter.sensitiveTerms.add(term);
+            }
+        }
         
         // Add safety-specific patterns and terms
         for (String safetyTerm : container.getSafetyTerms()) {
-            compositeFilter.addSensitiveTerm(safetyTerm);
+            if (safetyTerm != null) {
+                compositeFilter.addSensitiveTerm(safetyTerm);
+            }
         }
         
         return compositeFilter;
     }
 }
+
+
+
+
+
+

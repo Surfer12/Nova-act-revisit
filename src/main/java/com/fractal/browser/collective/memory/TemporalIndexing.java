@@ -45,15 +45,27 @@ public class TemporalIndexing {
     // Information boundary for access control
     private final InformationBoundary boundary;
     
+    private final ZoneId timezone;  // Add timezone field
+    
     /**
      * Creates a new TemporalIndexing instance.
      */
-    public TemporalIndexing(InformationBoundary boundary) {
+    public TemporalIndexing() {
         this.timeIndex = Collections.synchronizedNavigableMap(new TreeMap<>());
         this.dateIndex = new ConcurrentHashMap<>();
         this.itemTimes = new ConcurrentHashMap<>();
         this.itemMetadata = new ConcurrentHashMap<>();
-        this.boundary = boundary;
+        this.timezone = ZoneId.of("UTC");  // Default to UTC, can be configured
+        this.boundary = null;
+    }
+    
+    public TemporalIndexing(ZoneId timezone) {
+        this.timeIndex = Collections.synchronizedNavigableMap(new TreeMap<>());
+        this.dateIndex = new ConcurrentHashMap<>();
+        this.itemTimes = new ConcurrentHashMap<>();
+        this.itemMetadata = new ConcurrentHashMap<>();
+        this.timezone = timezone;
+        this.boundary = null;
     }
     
     /**
@@ -65,7 +77,8 @@ public class TemporalIndexing {
      * @return true if indexed, false if already indexed
      */
     public boolean indexItem(String itemId, Instant timestamp, Map<String, Object> metadata) {
-        if (itemTimes.containsKey(itemId)) {
+        // Use putIfAbsent to ensure atomic check-and-set operation
+        if (itemTimes.putIfAbsent(itemId, timestamp) != null) {
             return false; // Already indexed
         }
         
@@ -74,13 +87,12 @@ public class TemporalIndexing {
                 .add(itemId);
         
         // Add to date index
-        LocalDate date = LocalDate.ofInstant(timestamp, ZoneId.systemDefault());
+        LocalDate date = LocalDate.ofInstant(timestamp, timezone);
         String dateString = date.toString(); // YYYY-MM-DD format
         dateIndex.computeIfAbsent(dateString, k -> Collections.synchronizedSet(new HashSet<>()))
                 .add(itemId);
         
-        // Store item time and metadata
-        itemTimes.put(itemId, timestamp);
+        // Store metadata
         itemMetadata.put(itemId, new HashMap<>(metadata));
         
         return true;
@@ -119,20 +131,24 @@ public class TemporalIndexing {
         // Remove from time index
         Set<String> timeEntries = timeIndex.get(timestamp);
         if (timeEntries != null) {
-            timeEntries.remove(itemId);
-            if (timeEntries.isEmpty()) {
-                timeIndex.remove(timestamp);
+            synchronized (timeEntries) {
+                timeEntries.remove(itemId);
+                if (timeEntries.isEmpty()) {
+                    timeIndex.remove(timestamp);
+                }
             }
         }
         
         // Remove from date index
-        LocalDate date = LocalDate.ofInstant(timestamp, ZoneId.systemDefault());
+        LocalDate date = LocalDate.ofInstant(timestamp, timezone);
         String dateString = date.toString();
         Set<String> dateEntries = dateIndex.get(dateString);
         if (dateEntries != null) {
-            dateEntries.remove(itemId);
-            if (dateEntries.isEmpty()) {
-                dateIndex.remove(dateString);
+            synchronized (dateEntries) {
+                dateEntries.remove(itemId);
+                if (dateEntries.isEmpty()) {
+                    dateIndex.remove(dateString);
+                }
             }
         }
         
@@ -183,9 +199,11 @@ public class TemporalIndexing {
         
         // Collect all item IDs in the range that pass boundary checks
         for (Set<String> items : rangeMap.values()) {
-            for (String itemId : items) {
-                if (boundary.canInformationPass(itemId, contextId)) {
-                    result.add(itemId);
+            synchronized (items) {
+                for (String itemId : items) {
+                    if (boundary.canInformationPass(itemId, contextId)) {
+                        result.add(itemId);
+                    }
                 }
             }
         }
@@ -203,9 +221,11 @@ public class TemporalIndexing {
     public List<String> findItemsOnDate(String date, String contextId) {
         Set<String> dateItems = dateIndex.getOrDefault(date, Collections.emptySet());
         
-        return dateItems.stream()
-                .filter(itemId -> boundary.canInformationPass(itemId, contextId))
-                .collect(Collectors.toList());
+        synchronized (dateItems) {
+            return dateItems.stream()
+                    .filter(itemId -> boundary.canInformationPass(itemId, contextId))
+                    .collect(Collectors.toList());
+        }
     }
     
     /**
@@ -231,8 +251,8 @@ public class TemporalIndexing {
             // Truncate timestamp to the specified unit
             Instant periodStart = truncateToUnit(timestamp, unit);
             
-            // Add to result
-            result.computeIfAbsent(periodStart, k -> new ArrayList<>()).add(itemId);
+            // Add to result with synchronization on the list
+            result.computeIfAbsent(periodStart, k -> Collections.synchronizedList(new ArrayList<>())).add(itemId);
         }
         
         return result;
@@ -242,20 +262,20 @@ public class TemporalIndexing {
      * Truncates an Instant to the specified ChronoUnit.
      */
     private Instant truncateToUnit(Instant instant, ChronoUnit unit) {
-        LocalDate date = LocalDate.ofInstant(instant, ZoneId.systemDefault());
+        LocalDate date = LocalDate.ofInstant(instant, timezone);
         
         switch (unit) {
             case YEARS:
                 return LocalDate.of(date.getYear(), 1, 1)
-                        .atStartOfDay(ZoneId.systemDefault()).toInstant();
+                        .atStartOfDay(timezone).toInstant();
             case MONTHS:
                 return LocalDate.of(date.getYear(), date.getMonthValue(), 1)
-                        .atStartOfDay(ZoneId.systemDefault()).toInstant();
+                        .atStartOfDay(timezone).toInstant();
             case WEEKS:
                 return date.minusDays(date.getDayOfWeek().getValue() - 1)
-                        .atStartOfDay(ZoneId.systemDefault()).toInstant();
+                        .atStartOfDay(timezone).toInstant();
             case DAYS:
-                return date.atStartOfDay(ZoneId.systemDefault()).toInstant();
+                return date.atStartOfDay(timezone).toInstant();
             case HOURS:
                 return instant.truncatedTo(ChronoUnit.HOURS);
             case MINUTES:
@@ -323,10 +343,12 @@ public class TemporalIndexing {
                 Instant time = timeline.get(j);
                 Set<String> items = timeIndex.get(time);
                 
-                for (String itemId : items) {
-                    if (boundary.canInformationPass(itemId, contextId)) {
-                        itemCount++;
-                        itemsInWindow.add(itemId);
+                synchronized (items) {
+                    for (String itemId : items) {
+                        if (boundary.canInformationPass(itemId, contextId)) {
+                            itemCount++;
+                            itemsInWindow.add(itemId);
+                        }
                     }
                 }
             }
@@ -363,10 +385,12 @@ public class TemporalIndexing {
             Set<String> items = entry.getValue();
             
             boolean anyVisible = false;
-            for (String itemId : items) {
-                if (boundary.canInformationPass(itemId, contextId)) {
-                    anyVisible = true;
-                    break;
+            synchronized (items) {
+                for (String itemId : items) {
+                    if (boundary.canInformationPass(itemId, contextId)) {
+                        anyVisible = true;
+                        break;
+                    }
                 }
             }
             
@@ -422,17 +446,19 @@ public class TemporalIndexing {
             Map<String, Double> metadataSums = new HashMap<>();
             Map<String, Integer> metadataCounts = new HashMap<>();
             
-            for (String itemId : itemIds) {
-                Map<String, Object> metadata = itemMetadata.get(itemId);
-                if (metadata != null) {
-                    for (Map.Entry<String, Object> metaEntry : metadata.entrySet()) {
-                        String key = metaEntry.getKey();
-                        Object value = metaEntry.getValue();
-                        
-                        if (value instanceof Number) {
-                            double numValue = ((Number) value).doubleValue();
-                            metadataSums.put(key, metadataSums.getOrDefault(key, 0.0) + numValue);
-                            metadataCounts.put(key, metadataCounts.getOrDefault(key, 0) + 1);
+            synchronized (itemIds) {
+                for (String itemId : itemIds) {
+                    Map<String, Object> metadata = itemMetadata.get(itemId);
+                    if (metadata != null) {
+                        for (Map.Entry<String, Object> metaEntry : metadata.entrySet()) {
+                            String key = metaEntry.getKey();
+                            Object value = metaEntry.getValue();
+                            
+                            if (value instanceof Number) {
+                                double numValue = ((Number) value).doubleValue();
+                                metadataSums.put(key, metadataSums.getOrDefault(key, 0.0) + numValue);
+                                metadataCounts.put(key, metadataCounts.getOrDefault(key, 0) + 1);
+                            }
                         }
                     }
                 }

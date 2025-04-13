@@ -1,0 +1,47 @@
+digraph INFRA {
+  node [ color = "black", fillcolor = "#E6E6E6", height =1, style = "filled,bold,rounded", fontname = "Arial" ];
+  "SQLiteDatabase" [ label = "SQLiteDatabase
+(AWS::DynamoDB::Table)", shape =cylinder, fillcolor = "#FFCFB3" ];
+  "CurlTool" [ label = "CurlTool
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "FFmpegTool" [ label = "FFmpegTool
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "QRCodeGenerator" [ label = "QRCodeGenerator
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "KnowledgeGraph" [ label = "KnowledgeGraph
+(AWS::Neptune::DBCluster)", shape =cylinder, fillcolor = "#FFCFB3" ];
+  "HeadlessChromeBrowser" [ label = "HeadlessChromeBrowser
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "SequentialThinkingTool" [ label = "SequentialThinkingTool
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "StripeIntegration" [ label = "StripeIntegration
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "BraveSearchAPI" [ label = "BraveSearchAPI
+(AWS::ApiGateway::RestApi)", shape =rectangle, fillcolor = "#E78F81" ];
+  "SlackIntegration" [ label = "SlackIntegration
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "RedisDatabase" [ label = "RedisDatabase
+(AWS::ElastiCache::CacheCluster)", shape =cylinder, fillcolor = "#FFCFB3" ];
+  "GitHubIntegration" [ label = "GitHubIntegration
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "GoogleMapsIntegration" [ label = "GoogleMapsIntegration
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "GoogleDriveIntegration" [ label = "GoogleDriveIntegration
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "TimeTools" [ label = "TimeTools
+(AWS::Lambda::Function)", shape =rectangle ];
+  "URLFetcher" [ label = "URLFetcher
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "GitRepositoryManager" [ label = "GitRepositoryManager
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "KubernetesClusterManager" [ label = "KubernetesClusterManager
+(AWS::EKS::Cluster)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "DockerCLI" [ label = "DockerCLI
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "PuppeteerBrowser" [ label = "PuppeteerBrowser
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+  "LocalFileSystem" [ label = "LocalFileSystem
+(AWS::EFS::FileSystem)", shape =cylinder, fillcolor = "#FFF5CD" ];
+  "SafetyContainer" [ label = "SafetyContainer
+(AWS::Lambda::Function)", shape =rectangle, fillcolor = "#B7E0FF" ];
+}
