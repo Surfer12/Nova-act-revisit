@@ -4,27 +4,8 @@ import com.fractal.browser.model.SemanticInstruction;
 import java.util.Map;
 
 /**
- * A processor for handling fractal computations based on semantic instructions.
+ * Interface for fractal processing operations.
  */
-public class FractalProcessor {
-    private final int maxIterations;
-    private final double convergenceThreshold;
-    
-    public FractalProcessor(int maxIterations, double convergenceThreshold) {
-        this.maxIterations = maxIterations;
-        this.convergenceThreshold = convergenceThreshold;
-    }
-    
-    /**
-     * Processes a semantic instruction and returns the result.
-     * @param instruction The semantic instruction to process.
-     * @return The processing result.
-     */
-    public ProcessingResult process(SemanticInstruction instruction) {
-        // Placeholder implementation for processing logic
-        // In a real implementation, this would perform fractal calculations
-        return new ProcessingResult(new java.util.HashMap<>(), maxIterations, convergenceThreshold);
-    }
 public interface FractalProcessor {
     /**
      * Processes a semantic instruction using the fractal algorithm (z = z² + c)
@@ -39,4 +20,13 @@ public interface FractalProcessor {
      * @return Map containing processing parameters
      */
     Map<String, Object> getParameters();
+    
+    /**
+     * Processes a node-specific instruction
+     * @param instruction The semantic instruction to process
+     * @param nodeId The node identifier
+     * @param contextId The context identifier
+     * @return ProcessingResult containing node-specific results
+     */
+    ProcessingResult processNode(SemanticInstruction instruction, String nodeId, String contextId);
 }

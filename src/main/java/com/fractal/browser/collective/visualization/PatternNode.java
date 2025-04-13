@@ -3,6 +3,9 @@ package com.fractal.browser.collective.visualization;
 import java.util.Map;
 import java.util.HashMap;
 
+/**
+ * Represents a node in the emergent pattern visualization.
+ */
 public class PatternNode {
     private double x;
     private double y;

@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.function.Predicate;
+import java.util.concurrent.CompletionException;
 
 import com.fractal.browser.collective.boundaries.InformationBoundary;
 import com.fractal.browser.collective.communication.InsightExchange;
@@ -119,89 +120,37 @@ public class CollectiveFractalProcessor implements CollectiveProcessor {
     
     @Override
     public ProcessingResult processCollectively(SemanticInstruction instruction, String contextId) {
-<<<<<<< HEAD
         try {
-            // Generate a unique ID for this processing task
             String processingId = generateProcessingId(instruction);
-            processingResults.put(processingId, new ConcurrentHashMap<>());
+            processingResults.putIfAbsent(processingId, new ConcurrentHashMap<>());
             
-            // Discover available nodes that can participate
-            Set<String> availableNodes = nodeDiscovery.discoverNodes(node -> true).stream()
-                    .filter(nodeId -> nodeDiscovery.isNodeAvailable(nodeId))
-                    .collect(Collectors.toSet());
-            
+            // Discover available nodes
+            Set<String> availableNodes = discoverNodes(node -> true);
             if (availableNodes.size() < minNodeParticipation) {
-                throw new FractalBrowserException(
-                        "Insufficient nodes available for collective processing. Required: " 
-                                + minNodeParticipation + ", Available: " + availableNodes.size());
+                throw new FractalBrowserException("Insufficient nodes available for collective processing");
             }
             
-            // Start distributed processing
-            List<CompletableFuture<ProcessingResult>> futures = new ArrayList<>();
-            
-            for (String nodeId : availableNodes) {
-                CompletableFuture<ProcessingResult> future = CompletableFuture.supplyAsync(() -> {
-                    // Create a local processor for this node
-                    FractalProcessor processor = new FractalProcessor(maxIterations, convergenceThreshold);
-                    
-                    // Apply contextual transformations based on node's access level
-                    SemanticInstruction transformedInstruction = transformInstructionForNode(
-                            instruction, nodeId, contextId);
-                    
-                    // Process the instruction
-                    ProcessingResult result = processor.process(transformedInstruction);
-                    
-                    // Store the individual result
-                    processingResults.get(processingId).put(nodeId, result);
-                    
-                    return result;
-                }, processingExecutor);
-                
-                futures.add(future);
-            }
-            
-            // Wait for all processing to complete
-            CompletableFuture<Void> allFutures = CompletableFuture.allOf(
-                    futures.toArray(new CompletableFuture[0]));
-            
-            // Timeout after a reasonable period
-            allFutures.get();
-            
+            // Distribute processing across nodes
+            List<CompletableFuture<ProcessingResult>> futures = availableNodes.stream()
+                .map(nodeId -> CompletableFuture.supplyAsync(() -> {
+                    try {
+                        SemanticInstruction transformedInstruction = transformInstructionForNode(instruction, nodeId, contextId);
+                        return processNode(transformedInstruction, nodeId, contextId);
+                    } catch (Exception e) {
+                        throw new CompletionException("Node processing failed: " + nodeId, e);
+                    }
+                }, processingExecutor))
+                .collect(Collectors.toList());
+
+            // Wait for all nodes to complete
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
             // Aggregate results using fractal aggregation
             return aggregateResults(processingId, contextId);
             
         } catch (Exception e) {
             throw new FractalBrowserException("Collective processing failed", e);
-=======
-        String processingId = generateProcessingId(instruction);
-        processingResults.putIfAbsent(processingId, new ConcurrentHashMap<>());
-        
-        // Discover available nodes
-        Set<String> availableNodes = discoverNodes(node -> true);
-        if (availableNodes.size() < minNodeParticipation) {
-            throw new FractalBrowserException("Insufficient nodes available for collective processing");
->>>>>>> ec79ba2 (Enhance YAML therapeutic model with new core tags for meta-awareness, attentional flexibility, and iterative refinement. Improve structure and clarity)
         }
-        
-        // Distribute processing across nodes
-        List<CompletableFuture<ProcessingResult>> futures = availableNodes.stream()
-            .map(nodeId -> CompletableFuture.supplyAsync(() -> {
-                try {
-                    SemanticInstruction transformedInstruction = transformInstructionForNode(instruction, nodeId, contextId);
-                    ProcessingResult result = processNode(transformedInstruction, nodeId, contextId);
-                    processingResults.get(processingId).put(nodeId, result);
-                    return result;
-                } catch (Exception e) {
-                    throw new FractalBrowserException("Error processing on node " + nodeId, e);
-                }
-            }, processingExecutor))
-            .collect(Collectors.toList());
-        
-        // Wait for all processing to complete
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        
-        // Aggregate results
-        return aggregateResults(processingId, contextId);
     }
     
     /**

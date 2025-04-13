@@ -24,7 +24,7 @@ import com.fractal.browser.collective.boundaries.InformationBoundary;
  * This class applies fractal synchronization patterns that support both highly coherent
  * and loosely coupled node interactions.
  */
-public class SynchronizationProtocol {
+public class SynchronizationProtocol implements SynchronizationProtocolInterface {
     
     // Maps sync session IDs to their data
     private final Map<String, SyncSession> activeSessions;
@@ -602,21 +602,20 @@ public class SynchronizationProtocol {
         
         return cleanedCount;
     }
-}
 
-public interface SynchronizationProtocol {
-    /**
-     * Synchronizes data across nodes
-     * @param dataType The type of data to synchronize
-     * @param contextId The context identifier
-     */
-    void synchronizeDataType(String dataType, String contextId);
-    
-    /**
-     * Gets synchronized data
-     * @param dataType The type of data
-     * @param contextId The context identifier
-     * @return Map containing synchronized data
-     */
-    Map<String, Object> getSynchronizedData(String dataType, String contextId);
+    @Override
+    public void synchronizeDataType(String dataType, String contextId) {
+        // Implementation of interface method
+        synchronizeDataType(dataType, new HashMap<>(), contextId);
+    }
+
+    @Override
+    public Map<String, Object> getSynchronizedData(String dataType, String contextId) {
+        List<DataItem> items = getAccessibleData(dataType, contextId);
+        Map<String, Object> result = new HashMap<>();
+        for (DataItem item : items) {
+            result.put(item.getItemId(), item.getValue());
+        }
+        return result;
+    }
 }

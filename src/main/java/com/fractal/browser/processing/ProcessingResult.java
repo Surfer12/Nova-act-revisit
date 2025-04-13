@@ -11,7 +11,7 @@ public class ProcessingResult {
     private String contextId;
     
     public ProcessingResult(Map<String, Object> results, int iterations, double convergenceValue) {
-        this.results = results;
+        this.results = new HashMap<>(results);
         this.iterations = iterations;
         this.convergenceValue = convergenceValue;
     }
@@ -20,11 +20,10 @@ public class ProcessingResult {
         this.results = new HashMap<>();
         this.iterations = 0;
         this.convergenceValue = 0.0;
-        this.contextId = null;
     }
     
     public void setResults(Map<String, Object> results) {
-        this.results = results;
+        this.results = new HashMap<>(results);
     }
     
     public void setIterations(int iterations) {
@@ -40,7 +39,7 @@ public class ProcessingResult {
     }
     
     public Map<String, Object> getResults() {
-        return results;
+        return new HashMap<>(results);
     }
     
     public int getIterations() {
@@ -50,11 +49,18 @@ public class ProcessingResult {
     public double getConvergenceValue() {
         return convergenceValue;
     }
-<<<<<<< HEAD
-=======
     
     public Optional<String> getContextId() {
         return Optional.ofNullable(contextId);
     }
->>>>>>> ec79ba2 (Enhance YAML therapeutic model with new core tags for meta-awareness, attentional flexibility, and iterative refinement. Improve structure and clarity)
+
+    @Override
+    public String toString() {
+        return "ProcessingResult{" +
+                "results=" + results +
+                ", iterations=" + iterations +
+                ", convergenceValue=" + convergenceValue +
+                ", contextId='" + contextId + '\'' +
+                '}';
+    }
 }
