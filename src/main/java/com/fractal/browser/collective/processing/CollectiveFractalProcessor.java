@@ -28,7 +28,7 @@ import com.fractal.browser.processing.ProcessingResult;
  * of collective nodes. It distributes processing tasks, aggregates results, and identifies
  * emergent patterns through recursive, multi-scale analysis.
  * 
- * This processor implements the core fractal processing algorithm (z = z² + c) in a
+ * This processor implements the core fractal processing algorithm (z = z^2 + c) in a
  * distributed context, enabling collaborative processing and insight emergence.
  */
 public class CollectiveFractalProcessor {

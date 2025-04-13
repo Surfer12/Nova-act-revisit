@@ -260,7 +260,7 @@ public class EmergentPatternDetector {
                     signatureBuilder.append(signature);
                     
                     if (j < n - 1) {
-                        signatureBuilder.append("’");
+                        signatureBuilder.append("->");
                     }
                 }
                 
