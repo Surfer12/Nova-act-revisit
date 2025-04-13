@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.Instant;
+import java.util.Collections;
 
 import com.fractal.browser.collective.boundaries.InformationBoundary;
 import com.fractal.browser.collective.processing.EmergentPatternDetector;

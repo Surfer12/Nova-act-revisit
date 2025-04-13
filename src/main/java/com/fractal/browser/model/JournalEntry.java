@@ -9,6 +9,13 @@ public class JournalEntry {
     private LocalDateTime timestamp;
     private Map<String, Object> metadata;
     
+    // Constructor that accepts Builder
+    private JournalEntry(Builder builder) {
+        this.content = builder.content;
+        this.timestamp = builder.timestamp;
+        this.metadata = builder.metadata;
+    }
+    
     // Builder pattern implementation
     public static class Builder {
         private String content;

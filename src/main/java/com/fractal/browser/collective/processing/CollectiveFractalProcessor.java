@@ -22,6 +22,8 @@ import com.fractal.browser.exceptions.FractalBrowserException;
 import com.fractal.browser.model.SemanticInstruction;
 import com.fractal.browser.processing.FractalProcessor;
 import com.fractal.browser.processing.ProcessingResult;
+import com.fractal.browser.collective.communication.SynchronizationProtocol;
+import com.fractal.browser.collective.communication.Insight;
 
 /**
  * CollectiveFractalProcessor extends the basic FractalProcessor to operate across a network
@@ -43,6 +45,7 @@ public class CollectiveFractalProcessor {
     private final DistributedInsightRepository insightRepository;
     private final InformationBoundary boundary;
     private final InsightRegistry insightRegistry;
+    private final SynchronizationProtocol synchronizationProtocol;
     
     // Thread pool for parallel processing
     private final ExecutorService processingExecutor;
@@ -66,6 +69,7 @@ public class CollectiveFractalProcessor {
      * @param insightRegistry Registry for tracking and categorizing insights
      * @param minNodeParticipation Minimum number of nodes required for collective processing
      * @param consensusThreshold Threshold for determining consensus (percentage, 0-100)
+     * @param synchronizationProtocol Service for synchronizing data types between nodes
      */
     public CollectiveFractalProcessor(
             int maxIterations,
@@ -76,7 +80,8 @@ public class CollectiveFractalProcessor {
             InformationBoundary boundary,
             InsightRegistry insightRegistry,
             int minNodeParticipation,
-            int consensusThreshold) {
+            int consensusThreshold,
+            SynchronizationProtocol synchronizationProtocol) {
         
         this.maxIterations = maxIterations;
         this.convergenceThreshold = convergenceThreshold;
@@ -87,6 +92,7 @@ public class CollectiveFractalProcessor {
         this.insightRegistry = insightRegistry;
         this.minNodeParticipation = minNodeParticipation;
         this.consensusThreshold = consensusThreshold;
+        this.synchronizationProtocol = synchronizationProtocol;
         
         // Create a fixed thread pool for processing tasks
         this.processingExecutor = Executors.newFixedThreadPool(
@@ -432,5 +438,22 @@ public class CollectiveFractalProcessor {
      */
     public void shutdown() {
         processingExecutor.shutdown();
+    }
+
+    public void processCollectively(String contextId) {
+        Set<String> availableNodes = nodeDiscovery.discoverNodes(node -> true);
+        
+        for (String nodeId : availableNodes) {
+            if (nodeDiscovery.isNodeAvailable(nodeId)) {
+                processNode(nodeId, contextId);
+            }
+        }
+        
+        List<Map<String, Object>> recentResults = insightRepository.findByTag("processing_result", contextId)
+            .stream()
+            .map(Insight::toMap)
+            .collect(Collectors.toList());
+            
+        synchronizationProtocol.synchronizeDataType("processing_results", contextId);
     }
 }

@@ -401,6 +401,52 @@ public class SynchronizationProtocol {
     }
     
     /**
+     * Synchronizes data of a specific type with a map of values.
+     *
+     * @param dataType The type of data to synchronize
+     * @param data The data to synchronize
+     * @param contextId The context identifier
+     * @return The result of the synchronization
+     */
+    public SyncSession.SyncResult synchronizeDataType(String dataType, Map<String, Object> data, String contextId) {
+        // Create a unique session for this synchronization
+        String sessionId = UUID.randomUUID().toString();
+        
+        // Update each item in the data map
+        int itemsSynced = 0;
+        int conflicts = 0;
+        
+        try {
+            for (Map.Entry<String, Object> entry : data.entrySet()) {
+                long version = updateData(dataType, entry.getKey(), entry.getValue());
+                if (version > 0) {
+                    itemsSynced++;
+                } else {
+                    conflicts++;
+                }
+            }
+            
+            return new SyncSession.SyncResult(
+                dataType,
+                true,
+                itemsSynced,
+                0,
+                conflicts,
+                "Successfully synchronized " + itemsSynced + " items with " + conflicts + " conflicts"
+            );
+        } catch (Exception e) {
+            return new SyncSession.SyncResult(
+                dataType,
+                false,
+                0,
+                0,
+                0,
+                "Synchronization failed: " + e.getMessage()
+            );
+        }
+    }
+    
+    /**
      * Resolves a conflict between local and remote data.
      * 
      * @param dataType The type of data

@@ -366,4 +366,24 @@ public class NodeDiscovery {
         
         return result;
     }
+    
+    /**
+     * Gets a set of node IDs that match the given filter.
+     *
+     * @param filter Predicate to filter nodes by their metadata
+     * @return A set of node IDs
+     */
+    public Set<String> discoverNodeIds(Predicate<Map<String, Object>> filter) {
+        return discoverNodes(filter).keySet();
+    }
+    
+    /**
+     * Checks if a node is available.
+     *
+     * @param nodeId The node identifier
+     * @return true if the node is registered and connected
+     */
+    public boolean isNodeAvailable(String nodeId) {
+        return nodeRegistry.containsKey(nodeId) && connectionStatus.getOrDefault(nodeId, false);
+    }
 }

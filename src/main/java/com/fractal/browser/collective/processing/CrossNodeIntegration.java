@@ -335,113 +335,22 @@ public class CrossNodeIntegration {
      * @param contextId The context ID for boundary enforcement
      * @return Merged insights
      */
-    private Map<String, Object> flattenAndMergeInsights(
-            Map<String, List<Map<String, Object>>> nodeInsights,
-            String contextId) {
-        
+    private Map<String, Object> flattenAndMergeInsights(Map<String, List<Map<String, Object>>> nodeInsights, String contextId) {
         Map<String, Object> merged = new HashMap<>();
-        Set<String> attributeKeys = new HashSet<>();
-        List<Map<String, Object>> accessibleInsights = new ArrayList<>();
+        Map<Object, Integer> globalCounts = new HashMap<>();
         
-        // Collect all accessible insights and attribute keys
         for (Map.Entry<String, List<Map<String, Object>>> entry : nodeInsights.entrySet()) {
-            String nodeId = entry.getKey();
-            List<Map<String, Object>> insights = entry.getValue();
-            
-            for (Map<String, Object> insight : insights) {
-                if (canAccessInsight(insight, contextId)) {
-                    // Add node identifier
-                    insight.put("_nodeId", nodeId);
-                    accessibleInsights.add(insight);
-                    
-                    // Collect attribute keys
-                    for (String key : insight.keySet()) {
-                        if (!key.startsWith("_")) {
-                            attributeKeys.add(key);
-                        }
-                    }
+            Map<Object, Integer> localCounts = new HashMap<>();
+            for (Map<String, Object> insight : entry.getValue()) {
+                for (Map.Entry<String, Object> field : insight.entrySet()) {
+                    localCounts.merge(field.getValue(), 1, Integer::sum);
+                    globalCounts.merge(field.getValue(), 1, Integer::sum);
                 }
             }
+            merged.put(entry.getKey(), localCounts);
         }
         
-        // Initialize aggregate structures
-        merged.put("insight_count", accessibleInsights.size());
-        merged.put("node_count", nodeInsights.size());
-        
-        // Merge numerical attributes
-        Map<String, Double> sums = new HashMap<>();
-        Map<String, Integer> counts = new HashMap<>();
-        Map<String, Double> mins = new HashMap<>();
-        Map<String, Double> maxes = new HashMap<>();
-        
-        // Merge categorical attributes
-        Map<String, Map<Object, Integer>> valueCounts = new HashMap<>();
-        
-        // Process all insights
-        for (Map<String, Object> insight : accessibleInsights) {
-            for (String key : attributeKeys) {
-                if (!insight.containsKey(key)) {
-                    continue;
-                }
-                
-                Object value = insight.get(key);
-                
-                // Handle numerical values
-                if (value instanceof Number) {
-                    double numValue = ((Number) value).doubleValue();
-                    
-                    sums.put(key, sums.getOrDefault(key, 0.0) + numValue);
-                    counts.put(key, counts.getOrDefault(key, 0) + 1);
-                    
-                    mins.put(key, Math.min(mins.getOrDefault(key, Double.MAX_VALUE), numValue));
-                    maxes.put(key, Math.max(maxes.getOrDefault(key, Double.MIN_VALUE), numValue));
-                }
-                
-                // Count all value occurrences
-                valueCounts.computeIfAbsent(key, k -> new HashMap<>())
-                        .put(value, valueCounts.get(key).getOrDefault(value, 0) + 1);
-            }
-        }
-        
-        // Calculate aggregate statistics
-        Map<String, Object> numericalStats = new HashMap<>();
-        
-        for (String key : sums.keySet()) {
-            Map<String, Object> stats = new HashMap<>();
-            stats.put("sum", sums.get(key));
-            stats.put("count", counts.get(key));
-            stats.put("average", sums.get(key) / counts.get(key));
-            stats.put("min", mins.get(key));
-            stats.put("max", maxes.get(key));
-            
-            numericalStats.put(key, stats);
-        }
-        
-        merged.put("numerical_stats", numericalStats);
-        
-        // Find most frequent values
-        Map<String, Object> mostFrequent = new HashMap<>();
-        
-        for (Map.Entry<String, Map<Object, Integer>> entry : valueCounts.entrySet()) {
-            String key = entry.getKey();
-            Map<Object, Integer> counts = entry.getValue();
-            
-            Optional<Map.Entry<Object, Integer>> mostCommon = counts.entrySet().stream()
-                    .max(Map.Entry.comparingByValue());
-            
-            if (mostCommon.isPresent()) {
-                Map<String, Object> freqInfo = new HashMap<>();
-                freqInfo.put("value", mostCommon.get().getKey());
-                freqInfo.put("count", mostCommon.get().getValue());
-                freqInfo.put("percentage", 100.0 * mostCommon.get().getValue() / accessibleInsights.size());
-                
-                mostFrequent.put(key, freqInfo);
-            }
-        }
-        
-        merged.put("most_frequent", mostFrequent);
-        merged.put("value_distributions", valueCounts);
-        
+        merged.put("global_counts", globalCounts);
         return merged;
     }
     
@@ -593,5 +502,31 @@ public class CrossNodeIntegration {
      */
     public void shutdown() {
         integrationExecutor.shutdown();
+    }
+
+    public Map<String, Object> integrateInsights(String contextId) {
+        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true);
+        
+        Map<String, List<Map<String, Object>>> nodeInsights = new HashMap<>();
+        for (String nodeId : nodes) {
+            if (nodeDiscovery.isNodeAvailable(nodeId)) {
+                List<Map<String, Object>> insights = insightExchange.exchangeInsights(contextId, Set.of(nodeId), "insight");
+                nodeInsights.put(nodeId, insights);
+            }
+        }
+        
+        Map<String, Object> mergedInsights = flattenAndMergeInsights(nodeInsights, contextId);
+        
+        String resultId = insightRepository.storeInsight(
+            UUID.randomUUID().toString(),
+            contextId,
+            Set.of("integration_result"),
+            mergedInsights,
+            1.0
+        );
+        
+        synchronizationProtocol.synchronizeDataType("integration_results", contextId);
+        
+        return mergedInsights;
     }
 }

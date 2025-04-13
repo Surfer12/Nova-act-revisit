@@ -85,6 +85,15 @@ public class Pattern {
     }
     
     /**
+     * Gets the pattern's name.
+     * 
+     * @return The pattern type as its name
+     */
+    public String getName() {
+        return type;
+    }
+    
+    /**
      * Gets a specific attribute value.
      * 
      * @param key The attribute key

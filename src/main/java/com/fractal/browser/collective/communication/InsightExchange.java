@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.function.Function;
 import java.util.concurrent.CompletableFuture;
 import java.util.Collections;
+import java.util.Set;
 
 import com.fractal.browser.collective.boundaries.InformationBoundary;
 import com.fractal.browser.collective.boundaries.PrivacyFilter;
@@ -40,6 +41,8 @@ public class InsightExchange {
     
     // Node discovery instance for locating exchange partners
     private final NodeDiscovery nodeDiscovery;
+    
+    private final SynchronizationProtocol synchronizationProtocol;
     
     /**
      * Represents an insight being exchanged.
@@ -165,12 +168,13 @@ public class InsightExchange {
      * @param informationBoundary The InformationBoundary for access control
      */
     public InsightExchange(NodeDiscovery nodeDiscovery, PrivacyFilter privacyFilter, 
-            InformationBoundary informationBoundary) {
+            InformationBoundary informationBoundary, SynchronizationProtocol synchronizationProtocol) {
         this.insightRegistry = new ConcurrentHashMap<>();
         this.activeSessions = new ConcurrentHashMap<>();
         this.nodeDiscovery = nodeDiscovery;
         this.privacyFilter = privacyFilter;
         this.informationBoundary = informationBoundary;
+        this.synchronizationProtocol = synchronizationProtocol;
     }
     
     /**
@@ -437,5 +441,63 @@ public class InsightExchange {
         }
         
         return cleanedCount;
+    }
+    
+    /**
+     * Exchanges insights with specified nodes in the collective.
+     *
+     * @param contextId The context identifier for the exchange
+     * @param targetNodes The set of nodes to exchange insights with
+     * @param insightType The type of insights to exchange
+     * @return A list of exchanged insights
+     */
+    public List<Map<String, Object>> exchangeInsights(String contextId, Set<String> targetNodes, String insightType) {
+        List<Map<String, Object>> exchangedInsights = new ArrayList<>();
+        
+        for (String nodeId : targetNodes) {
+            if (nodeDiscovery.isNodeConnected(nodeId)) {
+                try {
+                    Map<String, Object> nodeData = nodeDiscovery.getNodeMetadata(nodeId)
+                        .orElseThrow(() -> new IllegalStateException("Node metadata not found: " + nodeId));
+                    
+                    // Prepare exchange data
+                    Map<String, Object> exchangeData = Map.of(
+                        "contextId", contextId,
+                        "insightType", insightType,
+                        "sourceNode", nodeData.get(NodeDiscovery.NODE_ID)
+                    );
+                    
+                    // Synchronize data with the target node
+                    synchronizationProtocol.synchronizeDataType(
+                        "insight_exchange",
+                        exchangeData,
+                        contextId
+                    );
+                    
+                    // Add exchanged insights to the result list
+                    exchangedInsights.add(exchangeData);
+                } catch (Exception e) {
+                    // Log error and continue with next node
+                    System.err.println("Failed to exchange insights with node " + nodeId + ": " + e.getMessage());
+                }
+            }
+        }
+        
+        return exchangedInsights;
+    }
+    
+    /**
+     * Asynchronously exchanges insights with specified nodes.
+     *
+     * @param contextId The context identifier for the exchange
+     * @param targetNodes The set of nodes to exchange insights with
+     * @param insightType The type of insights to exchange
+     * @return A future that completes with the list of exchanged insights
+     */
+    public CompletableFuture<List<Map<String, Object>>> exchangeInsightsAsync(
+            String contextId,
+            Set<String> targetNodes,
+            String insightType) {
+        return CompletableFuture.supplyAsync(() -> exchangeInsights(contextId, targetNodes, insightType));
     }
 }
