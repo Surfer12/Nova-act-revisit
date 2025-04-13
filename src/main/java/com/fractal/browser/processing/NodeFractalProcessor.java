@@ -4,10 +4,20 @@ import com.fractal.browser.model.SemanticInstruction;
 import java.util.Map;
 import java.util.HashMap;
 
+/**
+ * Implementation of FractalProcessor that processes individual nodes using the Mandelbrot formula.
+ * This processor applies the formula z = z² + c iteratively until convergence or max iterations.
+ */
 public class NodeFractalProcessor implements FractalProcessor {
+    private static final double ESCAPE_RADIUS = 2.0;
     private final int maxIterations;
     private final double convergenceThreshold;
     
+    /**
+     * Creates a new NodeFractalProcessor with specified parameters.
+     * @param maxIterations Maximum number of iterations to perform
+     * @param convergenceThreshold Threshold for determining convergence
+     */
     public NodeFractalProcessor(int maxIterations, double convergenceThreshold) {
         this.maxIterations = maxIterations;
         this.convergenceThreshold = convergenceThreshold;
@@ -26,7 +36,7 @@ public class NodeFractalProcessor implements FractalProcessor {
         double convergenceValue = 0.0;
         
         // Apply the fractal formula z = z² + c
-        while (iterations < maxIterations && Math.abs(z) < 2.0) {
+        while (iterations < maxIterations && Math.abs(z) < ESCAPE_RADIUS) {
             z = z * z + c;
             iterations++;
             
@@ -49,6 +59,11 @@ public class NodeFractalProcessor implements FractalProcessor {
         result.setConvergenceValue(convergenceValue);
         
         return result;
+    }
+    
+    @Override
+    public ProcessingResult processNode(SemanticInstruction instruction, String nodeId, String contextId) {
+        return process(instruction, contextId);
     }
     
     @Override

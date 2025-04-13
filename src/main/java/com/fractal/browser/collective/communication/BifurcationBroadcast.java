@@ -68,15 +68,8 @@ public class BifurcationBroadcast {
          */
         public BifurcationEvent(String sourceNodeId, String topic, String content, 
                 Map<String, Object> metadata, double significance) {
-            this.eventId = UUID.randomUUID().toString();
-            this.sourceNodeId = sourceNodeId;
-            this.topic = topic;
-            this.content = content;
-            this.metadata = new HashMap<>(metadata);
-            this.significance = Math.max(0.0, Math.min(1.0, significance));
-            this.timestamp = Instant.now();
-            this.propagationHops = 0;
-            this.associatedPatterns = new ArrayList<>();
+            this(UUID.randomUUID().toString(), sourceNodeId, topic, content, 
+                    new HashMap<>(metadata), significance, Instant.now(), 0);
         }
         
         /**
@@ -110,7 +103,9 @@ public class BifurcationBroadcast {
          * Adds an associated pattern to this event.
          */
         public void addAssociatedPattern(Pattern pattern) {
-            this.associatedPatterns.add(pattern);
+            if (pattern != null) {
+                this.associatedPatterns.add(pattern);
+            }
         }
         
         /**
@@ -140,8 +135,12 @@ public class BifurcationBroadcast {
      * @return true if subscribed, false if already subscribed
      */
     public boolean subscribeTopic(String nodeId, String topic) {
-        subscriptions.putIfAbsent(nodeId, Collections.synchronizedSet(new HashSet<>()));
-        return subscriptions.get(nodeId).add(topic);
+        if (nodeId == null || topic == null) {
+            return false;
+        }
+        
+        subscriptions.computeIfAbsent(nodeId, k -> new HashSet<>()).add(topic);
+        return true;
     }
     
     /**
@@ -152,11 +151,15 @@ public class BifurcationBroadcast {
      * @return true if unsubscribed, false if not subscribed
      */
     public boolean unsubscribeTopic(String nodeId, String topic) {
-        if (!subscriptions.containsKey(nodeId)) {
+        if (nodeId == null || topic == null) {
             return false;
         }
         
-        return subscriptions.get(nodeId).remove(topic);
+        Set<String> nodeSubscriptions = subscriptions.get(nodeId);
+        if (nodeSubscriptions != null) {
+            return nodeSubscriptions.remove(topic);
+        }
+        return false;
     }
     
     /**
@@ -166,11 +169,12 @@ public class BifurcationBroadcast {
      * @return A set of subscribed topics
      */
     public Set<String> getSubscribedTopics(String nodeId) {
-        if (!subscriptions.containsKey(nodeId)) {
+        if (nodeId == null) {
             return Collections.emptySet();
         }
         
-        return new HashSet<>(subscriptions.get(nodeId));
+        Set<String> nodeSubscriptions = subscriptions.get(nodeId);
+        return nodeSubscriptions != null ? new HashSet<>(nodeSubscriptions) : Collections.emptySet();
     }
     
     /**
@@ -185,8 +189,10 @@ public class BifurcationBroadcast {
      */
     public Optional<BifurcationEvent> createBifurcationEvent(String sourceNodeId, String topic, 
             String content, Map<String, Object> metadata, double significance) {
+        if (sourceNodeId == null || topic == null || content == null || metadata == null) {
+            return Optional.empty();
+        }
         
-        // Check if this event meets the significance threshold
         if (significance < MIN_SIGNIFICANCE) {
             return Optional.empty();
         }
@@ -210,54 +216,36 @@ public class BifurcationBroadcast {
      */
     public Map<String, CompletableFuture<Boolean>> broadcastEvent(String eventId, 
             Predicate<Map<String, Object>> filter) {
-        
-        if (!eventRegistry.containsKey(eventId)) {
+        if (eventId == null) {
             return Collections.emptyMap();
         }
         
         BifurcationEvent event = eventRegistry.get(eventId);
+        if (event == null) {
+            return Collections.emptyMap();
+        }
         
         // Check if we've reached max propagation hops
         if (event.getPropagationHops() >= MAX_PROPAGATION_HOPS) {
             return Collections.emptyMap();
         }
         
-        // Find eligible nodes (connected and subscribed to this topic)
-        Map<String, Map<String, Object>> connectedNodes = nodeDiscovery.getConnectedNodes(filter);
-        Map<String, CompletableFuture<Boolean>> broadcastResults = new HashMap<>();
+        Map<String, CompletableFuture<Boolean>> results = new HashMap<>();
+        Set<String> eligibleReceivers = getEligibleReceivers(eventId);
         
-        for (String nodeId : connectedNodes.keySet()) {
-            // Skip broadcasting back to the source or nodes we've already sent to
-            if (nodeId.equals(event.getSourceNodeId()) || 
-                    (propagationPaths.containsKey(eventId) && 
-                     propagationPaths.get(eventId).contains(nodeId))) {
-                continue;
-            }
-            
-            // Check if node is subscribed to this topic
-            if (subscriptions.containsKey(nodeId) && 
-                    subscriptions.get(nodeId).contains(event.getTopic())) {
-                
-                // Check if event can pass information boundary
-                if (boundary.canInformationPass(eventId, nodeId)) {
-                    // Track this node in the propagation path
-                    propagationPaths.get(eventId).add(nodeId);
-                    
-                    // Create future for async broadcast
-                    CompletableFuture<Boolean> future = new CompletableFuture<>();
-                    broadcastResults.put(nodeId, future);
-                    
-                    // In a real implementation, this would be an async network call
-                    // For now, we'll just complete the future with success
-                    future.complete(true);
-                }
+        for (String receiverId : eligibleReceivers) {
+            if (filter == null || filter.test(Collections.singletonMap("nodeId", receiverId))) {
+                CompletableFuture<Boolean> future = new CompletableFuture<>();
+                results.put(receiverId, future);
+                // In a real implementation, this would involve actual network communication
+                future.complete(true);
             }
         }
         
         // Increment propagation hops after broadcasting
         event.incrementPropagationHops();
         
-        return broadcastResults;
+        return results;
     }
     
     /**
@@ -268,31 +256,22 @@ public class BifurcationBroadcast {
      * @return The ID of the received event if successful, empty Optional otherwise
      */
     public Optional<String> receiveEvent(String sourceNodeId, Map<String, Object> eventData) {
-        try {
-            String eventId = (String) eventData.get("eventId");
-            String topic = (String) eventData.get("topic");
-            String content = (String) eventData.get("content");
-            Map<String, Object> metadata = (Map<String, Object>) eventData.get("metadata");
-            double significance = (double) eventData.get("significance");
-            Instant timestamp = Instant.parse((String) eventData.get("timestamp"));
-            int propagationHops = (int) eventData.get("propagationHops");
-            
-            // Create event from received data
-            BifurcationEvent receivedEvent = new BifurcationEvent(
-                eventId, sourceNodeId, topic, content, metadata, significance, timestamp, propagationHops
-            );
-            
-            // Store the received event
-            eventRegistry.put(eventId, receivedEvent);
-            
-            // Initialize propagation path for this event if not exists
-            propagationPaths.putIfAbsent(eventId, new HashSet<>());
-            propagationPaths.get(eventId).add(sourceNodeId);
-            
-            return Optional.of(eventId);
-        } catch (Exception e) {
+        if (sourceNodeId == null || eventData == null) {
             return Optional.empty();
         }
+        
+        String eventId = (String) eventData.get("eventId");
+        if (eventId == null) {
+            return Optional.empty();
+        }
+        
+        BifurcationEvent event = eventRegistry.get(eventId);
+        if (event == null) {
+            return Optional.empty();
+        }
+        
+        event.incrementPropagationHops();
+        return Optional.of(eventId);
     }
     
     /**
@@ -302,6 +281,10 @@ public class BifurcationBroadcast {
      * @return An Optional containing the event, or empty if not found
      */
     public Optional<BifurcationEvent> getEvent(String eventId) {
+        if (eventId == null) {
+            return Optional.empty();
+        }
+        
         return Optional.ofNullable(eventRegistry.get(eventId));
     }
     
@@ -313,21 +296,22 @@ public class BifurcationBroadcast {
      * @return A list of relevant events
      */
     public List<BifurcationEvent> getEventsForTopic(String topic, String contextId) {
-        List<BifurcationEvent> topicEvents = new ArrayList<>();
+        if (topic == null) {
+            return Collections.emptyList();
+        }
         
+        List<BifurcationEvent> events = new ArrayList<>();
         for (BifurcationEvent event : eventRegistry.values()) {
-            if (event.getTopic().equals(topic)) {
-                // Ensure event can pass this boundary for the context
-                if (boundary.canInformationPass(event.getEventId(), contextId)) {
-                    topicEvents.add(event);
-                }
+            if (topic.equals(event.getTopic()) && 
+                (contextId == null || boundary.canInformationPass(event.getEventId(), contextId))) {
+                events.add(event);
             }
         }
         
         // Sort by significance (highest first)
-        topicEvents.sort((e1, e2) -> Double.compare(e2.getSignificance(), e1.getSignificance()));
+        events.sort((e1, e2) -> Double.compare(e2.getSignificance(), e1.getSignificance()));
         
-        return topicEvents;
+        return events;
     }
     
     /**
@@ -337,11 +321,12 @@ public class BifurcationBroadcast {
      * @return The set of node IDs in the propagation path
      */
     public Set<String> getPropagationPath(String eventId) {
-        if (!propagationPaths.containsKey(eventId)) {
+        if (eventId == null) {
             return Collections.emptySet();
         }
         
-        return new HashSet<>(propagationPaths.get(eventId));
+        Set<String> path = propagationPaths.get(eventId);
+        return path != null ? new HashSet<>(path) : Collections.emptySet();
     }
     
     /**
@@ -352,6 +337,10 @@ public class BifurcationBroadcast {
      * @return A significance score (0.0-1.0)
      */
     public double analyzeSignificance(String content, Map<String, Object> metadata) {
+        if (content == null || metadata == null) {
+            return 0.0;
+        }
+        
         // This would typically involve a more sophisticated analysis algorithm
         // For now, we'll use a simple heuristic based on content length and metadata
         
@@ -398,20 +387,18 @@ public class BifurcationBroadcast {
      * @return A list of the most significant events
      */
     public List<BifurcationEvent> getMostSignificantEvents(int limit, String contextId) {
-        List<BifurcationEvent> allEvents = new ArrayList<>();
-        
-        for (BifurcationEvent event : eventRegistry.values()) {
-            // Ensure event can pass this boundary for the context
-            if (boundary.canInformationPass(event.getEventId(), contextId)) {
-                allEvents.add(event);
-            }
+        if (limit <= 0) {
+            return Collections.emptyList();
         }
         
-        // Sort by significance (highest first)
-        allEvents.sort((e1, e2) -> Double.compare(e2.getSignificance(), e1.getSignificance()));
+        List<BifurcationEvent> events = new ArrayList<>(eventRegistry.values());
+        events.sort((e1, e2) -> Double.compare(e2.getSignificance(), e1.getSignificance()));
         
-        // Return up to the limit
-        return allEvents.size() <= limit ? allEvents : allEvents.subList(0, limit);
+        if (contextId != null) {
+            events.removeIf(event -> !boundary.canInformationPass(event.getEventId(), contextId));
+        }
+        
+        return events.subList(0, Math.min(limit, events.size()));
     }
     
     /**
@@ -421,35 +408,22 @@ public class BifurcationBroadcast {
      * @return A set of node IDs that would receive the event
      */
     public Set<String> getEligibleReceivers(String eventId) {
-        if (!eventRegistry.containsKey(eventId)) {
+        if (eventId == null) {
             return Collections.emptySet();
         }
         
         BifurcationEvent event = eventRegistry.get(eventId);
-        Set<String> eligibleNodes = new HashSet<>();
+        if (event == null) {
+            return Collections.emptySet();
+        }
         
-        // Find all connected nodes
-        Map<String, Map<String, Object>> connectedNodes = nodeDiscovery.getConnectedNodes(null);
-        
-        for (String nodeId : connectedNodes.keySet()) {
-            // Skip the source and nodes that already received this event
-            if (nodeId.equals(event.getSourceNodeId()) || 
-                    (propagationPaths.containsKey(eventId) && 
-                     propagationPaths.get(eventId).contains(nodeId))) {
-                continue;
-            }
-            
-            // Check if node is subscribed to this topic
-            if (subscriptions.containsKey(nodeId) && 
-                    subscriptions.get(nodeId).contains(event.getTopic())) {
-                
-                // Check if event can pass information boundary
-                if (boundary.canInformationPass(eventId, nodeId)) {
-                    eligibleNodes.add(nodeId);
-                }
+        Set<String> receivers = new HashSet<>();
+        for (Map.Entry<String, Set<String>> entry : subscriptions.entrySet()) {
+            if (entry.getValue().contains(event.getTopic())) {
+                receivers.add(entry.getKey());
             }
         }
         
-        return eligibleNodes;
+        return receivers;
     }
 }
