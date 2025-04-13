@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import java.util.function.Predicate;
 
 import com.fractal.browser.collective.boundaries.InformationBoundary;
 import com.fractal.browser.collective.communication.InsightExchange;
@@ -20,7 +21,6 @@ import com.fractal.browser.collective.core.InsightRegistry;
 import com.fractal.browser.collective.memory.DistributedInsightRepository;
 import com.fractal.browser.exceptions.FractalBrowserException;
 import com.fractal.browser.model.SemanticInstruction;
-import com.fractal.browser.processing.FractalProcessor;
 import com.fractal.browser.processing.ProcessingResult;
 import com.fractal.browser.collective.communication.SynchronizationProtocol;
 import com.fractal.browser.collective.communication.Insight;
@@ -31,9 +31,10 @@ import com.fractal.browser.collective.communication.Insight;
  * emergent patterns through recursive, multi-scale analysis.
  * 
  * This processor implements the core fractal processing algorithm (z = z^2 + c) in a
+ * This processor implements the core fractal processing algorithm (z = z� + c) in a
  * distributed context, enabling collaborative processing and insight emergence.
  */
-public class CollectiveFractalProcessor {
+public class CollectiveFractalProcessor implements CollectiveProcessor {
     
     // The fractal processing parameters
     private final int maxIterations;
@@ -101,15 +102,24 @@ public class CollectiveFractalProcessor {
         this.processingResults = new ConcurrentHashMap<>();
     }
     
-    /**
-     * Processes a semantic instruction collectively across the network.
-     * 
-     * @param instruction The semantic instruction to process
-     * @param contextId The context ID for boundary enforcement
-     * @return The collective processing result
-     * @throws FractalBrowserException if processing fails
-     */
+    @Override
+    public Set<String> discoverNodes(Predicate<Map<String, Object>> filter) {
+        return nodeDiscovery.discoverNodes(filter);
+    }
+    
+    @Override
+    public boolean isNodeAvailable(String nodeId) {
+        return nodeDiscovery.isNodeAvailable(nodeId);
+    }
+    
+    @Override
+    public ProcessingResult process(SemanticInstruction instruction, String contextId) {
+        return processCollectively(instruction, contextId);
+    }
+    
+    @Override
     public ProcessingResult processCollectively(SemanticInstruction instruction, String contextId) {
+<<<<<<< HEAD
         try {
             // Generate a unique ID for this processing task
             String processingId = generateProcessingId(instruction);
@@ -162,7 +172,36 @@ public class CollectiveFractalProcessor {
             
         } catch (Exception e) {
             throw new FractalBrowserException("Collective processing failed", e);
+=======
+        String processingId = generateProcessingId(instruction);
+        processingResults.putIfAbsent(processingId, new ConcurrentHashMap<>());
+        
+        // Discover available nodes
+        Set<String> availableNodes = discoverNodes(node -> true);
+        if (availableNodes.size() < minNodeParticipation) {
+            throw new FractalBrowserException("Insufficient nodes available for collective processing");
+>>>>>>> ec79ba2 (Enhance YAML therapeutic model with new core tags for meta-awareness, attentional flexibility, and iterative refinement. Improve structure and clarity)
         }
+        
+        // Distribute processing across nodes
+        List<CompletableFuture<ProcessingResult>> futures = availableNodes.stream()
+            .map(nodeId -> CompletableFuture.supplyAsync(() -> {
+                try {
+                    SemanticInstruction transformedInstruction = transformInstructionForNode(instruction, nodeId, contextId);
+                    ProcessingResult result = processNode(transformedInstruction, nodeId, contextId);
+                    processingResults.get(processingId).put(nodeId, result);
+                    return result;
+                } catch (Exception e) {
+                    throw new FractalBrowserException("Error processing on node " + nodeId, e);
+                }
+            }, processingExecutor))
+            .collect(Collectors.toList());
+        
+        // Wait for all processing to complete
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        
+        // Aggregate results
+        return aggregateResults(processingId, contextId);
     }
     
     /**
@@ -258,67 +297,40 @@ public class CollectiveFractalProcessor {
         return new ProcessingResult(aggregatedResults, (int) Math.round(avgIterations), avgConvergence);
     }
     
-    /**
-     * Analyzes a set of processing results to identify emergent patterns.
-     * 
-     * @param contextId The context ID for boundary enforcement
-     * @return A map of emergent patterns
-     */
+    @Override
     public Map<String, List<ProcessingResult>> identifyEmergentPatterns(String contextId) {
         Map<String, List<ProcessingResult>> patterns = new HashMap<>();
         
-        // Retrieve recent processing results from the repository
-        List<Map<String, Object>> recentResults = insightRepository.findByTag("processing_result", contextId);
+        // Get all results for the context
+        List<ProcessingResult> contextResults = processingResults.values().stream()
+            .flatMap(nodeResults -> nodeResults.values().stream())
+            .filter(result -> result.getContextId().map(id -> id.equals(contextId)).orElse(false))
+            .collect(Collectors.toList());
         
-        // Group results by parameter values to identify patterns
-        // This is a simplified implementation - real pattern detection would be more sophisticated
-        Map<String, Map<Object, List<Map<String, Object>>>> parameterGroups = new HashMap<>();
+        // Analyze self-similarity
+        Map<String, Double> similarityScores = analyzeSelfSimilarity(contextResults, contextId);
         
-        for (Map<String, Object> result : recentResults) {
-            for (Map.Entry<String, Object> entry : result.entrySet()) {
-                String key = entry.getKey();
-                Object value = entry.getValue();
-                
-                // Skip metadata fields
-                if (key.startsWith("_")) {
-                    continue;
-                }
-                
-                parameterGroups.computeIfAbsent(key, k -> new HashMap<>())
-                        .computeIfAbsent(value, v -> new ArrayList<>())
-                        .add(result);
+        // Group results by similarity
+        similarityScores.forEach((patternId, score) -> {
+            if (score >= convergenceThreshold) {
+                patterns.computeIfAbsent(patternId, k -> new ArrayList<>())
+                    .addAll(contextResults.stream()
+                        .filter(result -> result.getResults().get("patternId").equals(patternId))
+                        .collect(Collectors.toList()));
             }
-        }
-        
-        // Identify patterns based on frequency and correlation
-        for (Map.Entry<String, Map<Object, List<Map<String, Object>>>> paramEntry : parameterGroups.entrySet()) {
-            String parameter = paramEntry.getKey();
-            Map<Object, List<Map<String, Object>>> valueGroups = paramEntry.getValue();
-            
-            for (Map.Entry<Object, List<Map<String, Object>>> valueEntry : valueGroups.entrySet()) {
-                Object value = valueEntry.getKey();
-                List<Map<String, Object>> resultsWithValue = valueEntry.getValue();
-                
-                // If enough results share this value, consider it a pattern
-                if (resultsWithValue.size() >= 3) { // Arbitrary threshold
-                    String patternId = parameter + ":" + value;
-                    
-                    // Convert the maps to ProcessingResult objects
-                    List<ProcessingResult> patternResults = resultsWithValue.stream()
-                            .map(m -> {
-                                Map<String, Object> resultMap = new HashMap<>(m);
-                                int iterations = ((Number) resultMap.getOrDefault("iterations", 0)).intValue();
-                                double convergence = ((Number) resultMap.getOrDefault("convergence", 0)).doubleValue();
-                                return new ProcessingResult(resultMap, iterations, convergence);
-                            })
-                            .collect(Collectors.toList());
-                    
-                    patterns.put(patternId, patternResults);
-                }
-            }
-        }
+        });
         
         return patterns;
+    }
+    
+    @Override
+    public Map<String, Object> getParameters() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("maxIterations", maxIterations);
+        params.put("convergenceThreshold", convergenceThreshold);
+        params.put("minNodeParticipation", minNodeParticipation);
+        params.put("consensusThreshold", consensusThreshold);
+        return params;
     }
     
     /**

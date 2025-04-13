@@ -603,3 +603,20 @@ public class SynchronizationProtocol {
         return cleanedCount;
     }
 }
+
+public interface SynchronizationProtocol {
+    /**
+     * Synchronizes data across nodes
+     * @param dataType The type of data to synchronize
+     * @param contextId The context identifier
+     */
+    void synchronizeDataType(String dataType, String contextId);
+    
+    /**
+     * Gets synchronized data
+     * @param dataType The type of data
+     * @param contextId The context identifier
+     * @return Map containing synchronized data
+     */
+    Map<String, Object> getSynchronizedData(String dataType, String contextId);
+}
