@@ -109,7 +109,7 @@ public class CrossNodeIntegration {
         activeIntegrations.put(integrationId, integrationMetadata);
         
         // Discover participating nodes
-        Set<String> nodes = nodeDiscovery.discoverNodes().stream()
+        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true).stream()
                 .filter(nodeId -> nodeDiscovery.isNodeAvailable(nodeId))
                 .collect(Collectors.toSet());
         
@@ -188,7 +188,7 @@ public class CrossNodeIntegration {
         Map<String, List<Map<String, Object>>> nodeInsights = new HashMap<>();
         
         // Discover available nodes
-        Set<String> nodes = nodeDiscovery.discoverNodes().stream()
+        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true).stream()
                 .filter(nodeId -> nodeDiscovery.isNodeAvailable(nodeId))
                 .collect(Collectors.toSet());
         

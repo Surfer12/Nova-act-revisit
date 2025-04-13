@@ -110,7 +110,7 @@ public class CollectiveFractalProcessor {
             processingResults.put(processingId, new ConcurrentHashMap<>());
             
             // Discover available nodes that can participate
-            Set<String> availableNodes = nodeDiscovery.discoverNodes().stream()
+            Set<String> availableNodes = nodeDiscovery.discoverNodes(node -> true).stream()
                     .filter(nodeId -> nodeDiscovery.isNodeAvailable(nodeId))
                     .collect(Collectors.toSet());
             

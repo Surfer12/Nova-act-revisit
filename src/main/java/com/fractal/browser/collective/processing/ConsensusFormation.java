@@ -99,7 +99,7 @@ public class ConsensusFormation {
         sessionVotes.put(sessionId, new ConcurrentHashMap<>());
         
         // Discover participating nodes
-        Set<String> nodes = nodeDiscovery.discoverNodes().stream()
+        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true).stream()
                 .filter(nodeId -> nodeDiscovery.isNodeAvailable(nodeId))
                 .collect(Collectors.toSet());
         
@@ -533,7 +533,7 @@ public class ConsensusFormation {
     private Map<String, Double> calculateNodeWeights(String contextId) {
         // In a real implementation, this would use trust scores and historical data
         // For simplicity, we'll return equal weights for all nodes
-        Set<String> nodes = nodeDiscovery.discoverNodes();
+        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true);
         Map<String, Double> weights = new HashMap<>();
         
         for (String nodeId : nodes) {
