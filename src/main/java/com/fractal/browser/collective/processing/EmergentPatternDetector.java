@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.Arrays;
 
 import com.fractal.browser.collective.boundaries.InformationBoundary;
 import com.fractal.browser.collective.memory.DistributedInsightRepository;
@@ -138,8 +139,20 @@ public class EmergentPatternDetector {
     private List<Map<String, Object>> detectAttributePatterns(long lookbackTimeMs, String contextId) {
         List<Map<String, Object>> attributePatterns = new ArrayList<>();
         
-        // Get recent insights from the repository
-        List<Map<String, Object>> recentInsights = retrieveRecentInsights(lookbackTimeMs, contextId);
+        // Get recent insights
+        List<Map<String, Object>> recentInsights = insightRepository.getRecentInsights(
+            maxInsights,
+            contextId
+        ).stream()
+        .map(insight -> {
+            Map<String, Object> data = new HashMap<>();
+            data.put("id", insight.getId());
+            data.put("type", insight.getType());
+            data.put("attributes", insight.getAttributes());
+            data.put("timestamp", insight.getTimestamp());
+            return data;
+        })
+        .collect(Collectors.toList());
         
         // Extract all attribute keys
         Set<String> attributeKeys = new HashSet<>();
@@ -482,13 +495,21 @@ public class EmergentPatternDetector {
                 System.currentTimeMillis());
         
         // Store the pattern in the repository
-        insightRepository.storeInsight(
-                "pattern:" + patternType.toLowerCase(),
-                patternData,
-                Set.of("pattern", patternType.toLowerCase()),
-                contextId);
+        String storedId = insightRepository.storeInsight(
+            patternId,
+            contextId,
+            new HashSet<>(Arrays.asList("pattern", patternType.toLowerCase())),
+            patternData,
+            1.0
+        );
         
-        return pattern;
+        return new Pattern(
+            storedId,
+            patternType,
+            description,
+            System.currentTimeMillis(),
+            patternData
+        );
     }
     
     /**

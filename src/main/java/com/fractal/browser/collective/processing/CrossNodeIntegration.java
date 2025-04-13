@@ -109,16 +109,24 @@ public class CrossNodeIntegration {
         activeIntegrations.put(integrationId, integrationMetadata);
         
         // Discover participating nodes
-        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true).stream()
+        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true);
+        nodes = nodes.stream()
                 .filter(nodeId -> nodeDiscovery.isNodeAvailable(nodeId))
                 .collect(Collectors.toSet());
         
         integrationMetadata.put("participatingNodes", new HashSet<>(nodes));
         
-        // Launch the integration process asynchronously
-        CompletableFuture.runAsync(() -> 
-            performIntegration(integrationId, topic, tags, maxDepth, contextId),
-            integrationExecutor);
+        // Store the insight
+        String insightId = insightRepository.storeInsight(
+            integrationId,
+            contextId,
+            tags,
+            integrationMetadata,
+            1.0
+        );
+        
+        // Broadcast the integration
+        synchronizationProtocol.synchronizeDataType("integration_results", integrationId);
         
         return integrationId;
     }

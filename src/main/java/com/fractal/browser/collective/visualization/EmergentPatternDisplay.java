@@ -1130,7 +1130,8 @@ public class EmergentPatternDisplay {
                         (double) i / branchPatterns.size(),
                         0.7, // Parameter c real part
                         0.3, // Parameter c imaginary part
-                        depth);
+                        depth  // Iteration depth
+                );
                 
                 double distanceFactor = coords[0] * radius;
                 double angleFactor = branchAngle + coords[1] * Math.PI / 4;

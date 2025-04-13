@@ -99,7 +99,8 @@ public class ConsensusFormation {
         sessionVotes.put(sessionId, new ConcurrentHashMap<>());
         
         // Discover participating nodes
-        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true).stream()
+        Set<String> nodes = nodeDiscovery.discoverNodes(node -> true);
+        nodes = nodes.stream()
                 .filter(nodeId -> nodeDiscovery.isNodeAvailable(nodeId))
                 .collect(Collectors.toSet());
         
@@ -112,7 +113,7 @@ public class ConsensusFormation {
         Map<String, Object> sessionInfo = new HashMap<>(sessionMetadata);
         sessionInfo.put("sessionId", sessionId);
         
-        synchronizationProtocol.synchronizeDataType("consensus_sessions", sessionInfo, contextId);
+        synchronizationProtocol.synchronizeDataType("consensus_sessions", sessionId);
         
         return sessionId;
     }

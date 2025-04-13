@@ -368,12 +368,14 @@ public class InsightFlowMapper {
         Map<String, Object> attributes = new HashMap<>();
         
         // Convert Set<String> to Map<String, Object> for tags
+        @SuppressWarnings("unchecked")
         Set<String> tags = (Set<String>) insight.get("tags");
         if (tags != null) {
             attributes.put("tags", new HashSet<>(tags));
         }
         
         // Convert Map<String, Object> to Map<String, Object> for metadata
+        @SuppressWarnings("unchecked")
         Map<String, Object> metadata = (Map<String, Object>) insight.get("metadata");
         if (metadata != null) {
             attributes.put("metadata", new HashMap<>(metadata));
@@ -549,13 +551,11 @@ public class InsightFlowMapper {
      * @return Timestamp in milliseconds
      */
     private long getInsightTimestamp(Map<String, Object> insight) {
-        if (insight.containsKey("_timestamp")) {
-            Object timestampObj = insight.get("_timestamp");
-            if (timestampObj instanceof Number) {
-                return ((Number) timestampObj).longValue();
-            }
+        Object timestampObj = insight.get("timestamp");
+        if (timestampObj instanceof Number) {
+            return ((Number) timestampObj).longValue();
         }
-        return 0;
+        return System.currentTimeMillis();
     }
     
     /**
